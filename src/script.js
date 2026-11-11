@@ -1,32 +1,55 @@
 
-async function carregarDados() {
-    try {
-        const resposta = await fetch("dados/fretes.csv");
+const botaoSimulacao = document.getElementById("calcularSimulacao");
 
-        if (!resposta.ok) {
-            throw new Error("Não foi possível carregar o arquivo CSV.");
-        }
+const resultado = document.getElementById("resultadoSimulacao");
 
-        const csv = await resposta.text();
+const moeda = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL"
+});
 
-        const linhas = csv.trim().split(/\r?\n/);
+botaoSimulacao.addEventListener("click", function () {
 
-        const cabecalhos = linhas[0].split(";");
+    // Capturar valores dos campos
+    const distancia = Number(document.getElementById("distancia").value);
 
-        console.log("Colunas encontradas:", cabecalhos);
-        console.log("Quantidade de registros:", linhas.length - 1);
+    const consumo = Number(document.getElementById("consumo").value);
 
-        document.getElementById("analiseFretes").innerHTML = `
-            <p>Arquivo carregado com sucesso!</p>
-            <p>Registros encontrados: ${linhas.length - 1}</p>
-        `;
+    const diesel = Number(document.getElementById("diesel").value);
 
-    } catch (erro) {
-        console.error("Erro:", erro);
+    // Validar informações
+    if (
+        !Number.isFinite(distancia) ||
+        !Number.isFinite(consumo) ||
+        !Number.isFinite(diesel) ||
+        distancia <= 0 ||
+        consumo <= 0 ||
+        diesel <= 0
+    ) {
+        resultado.textContent =
+            "Preencha todos os campos com valores maiores que zero.";
 
-        document.getElementById("analiseFretes").textContent =
-            "Erro ao carregar os dados. Verifique o arquivo CSV.";
+        return;
     }
-}
 
-carregarDados();
+    // Calcular combustível necessário
+    const litrosNecessarios = distancia / consumo;
+
+    // Calcular custo estimado
+    const custoCombustivel = litrosNecessarios * diesel;
+
+    // Apresentar resultado
+    resultado.innerHTML = `
+        <h3>Resultado da simulação</h3>
+
+        <p>Distância: ${distancia.toLocaleString("pt-BR")} km</p>
+
+        <p>Combustível necessário:
+        ${litrosNecessarios.toFixed(2)} litros</p>
+
+        <p>Preço do diesel: ${moeda.format(diesel)}</p>
+
+        <h3>Custo estimado:
+        ${moeda.format(custoCombustivel)}</h3>
+    `;
+});
