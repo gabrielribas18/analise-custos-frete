@@ -1,42 +1,32 @@
 
-// =====================================
-// ANÁLISE DE CUSTOS DE FRETE
-// Projeto Agrária
-// =====================================
+async function carregarDados() {
+    try {
+        const resposta = await fetch("dados/fretes.csv");
 
-// Dados iniciais do painel
-const projeto = {
-    nome: "Análise de Custos de Frete",
-    empresa: "Agrária",
-    status: "Em desenvolvimento"
-};
+        if (!resposta.ok) {
+            throw new Error("Não foi possível carregar o arquivo CSV.");
+        }
 
-// Indicadores
-const indicadores = {
-    totalFretes: 0,
-    custoTotal: 0,
-    custoMedio: 0,
-    distanciaTotal: 0
-};
+        const csv = await resposta.text();
 
-// Exibir informações no console
-console.log("Projeto:", projeto.nome);
-console.log("Empresa:", projeto.empresa);
-console.log("Status:", projeto.status);
+        const linhas = csv.trim().split(/\r?\n/);
 
-console.log("Indicadores iniciais:", indicadores);
+        const cabecalhos = linhas[0].split(";");
 
-// Função para calcular o custo médio
-function calcularCustoMedio(custoTotal, quantidadeFretes) {
-    if (quantidadeFretes === 0) {
-        return 0;
+        console.log("Colunas encontradas:", cabecalhos);
+        console.log("Quantidade de registros:", linhas.length - 1);
+
+        document.getElementById("analiseFretes").innerHTML = `
+            <p>Arquivo carregado com sucesso!</p>
+            <p>Registros encontrados: ${linhas.length - 1}</p>
+        `;
+
+    } catch (erro) {
+        console.error("Erro:", erro);
+
+        document.getElementById("analiseFretes").textContent =
+            "Erro ao carregar os dados. Verifique o arquivo CSV.";
     }
-
-    return custoTotal / quantidadeFretes;
 }
 
-console.log(
-    "Teste de cálculo:",
-    calcularCustoMedio(10000, 20)
-);
-
+carregarDados();
