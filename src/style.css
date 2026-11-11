@@ -1,1 +1,81 @@
 
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f1f3f6;
+    color: #202938;
+}
+
+header {
+    background: #142d4e;
+    color: white;
+    padding: 30px 40px;
+}
+
+header h1 {
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
+header p {
+    color: #cbd5e1;
+}
+
+main {
+    padding: 30px 40px;
+}
+
+section {
+    margin-bottom: 35px;
+}
+
+section h2 {
+    margin-bottom: 20px;
+    font-size: 21px;
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.card h3 {
+    font-size: 14px;
+    color: #64748b;
+    margin-bottom: 15px;
+}
+
+.card p {
+    font-size: 25px;
+    font-weight: bold;
+    color: #142d4e;
+}
+
+#analiseFretes,
+#simulacao {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    min-height: 100px;
+}
+
+@media (max-width: 600px) {
+    header,
+    main {
+        padding: 22px;
+    }
+}
+
