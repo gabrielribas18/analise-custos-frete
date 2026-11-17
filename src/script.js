@@ -1,55 +1,64 @@
 
-const botaoSimulacao = document.getElementById("calcularSimulacao");
-
+const origem = document.getElementById("origem");
+const destino = document.getElementById("destino");
+const tipoPercurso = document.getElementById("tipoPercurso");
+const campoRetorno = document.getElementById("campoRetorno");
+const destinoRetorno = document.getElementById("destinoRetorno");
+const botaoLocalizacao = document.getElementById("usarLocalizacao");
 const resultado = document.getElementById("resultadoSimulacao");
 
-const moeda = new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL"
+let coordenadasOrigem = null;
+
+// Mostrar ou esconder o campo de retorno
+tipoPercurso.addEventListener("change", function () {
+    campoRetorno.style.display =
+        tipoPercurso.value === "personalizado" ? "block" : "none";
 });
 
-botaoSimulacao.addEventListener("click", function () {
-
-    // Capturar valores dos campos
-    const distancia = Number(document.getElementById("distancia").value);
-
-    const consumo = Number(document.getElementById("consumo").value);
-
-    const diesel = Number(document.getElementById("diesel").value);
-
-    // Validar informações
-    if (
-        !Number.isFinite(distancia) ||
-        !Number.isFinite(consumo) ||
-        !Number.isFinite(diesel) ||
-        distancia <= 0 ||
-        consumo <= 0 ||
-        diesel <= 0
-    ) {
+// Obter localização atual
+function obterLocalizacao() {
+    if (!navigator.geolocation) {
         resultado.textContent =
-            "Preencha todos os campos com valores maiores que zero.";
-
+            "Seu navegador não oferece suporte à localização.";
         return;
     }
 
-    // Calcular combustível necessário
-    const litrosNecessarios = distancia / consumo;
+    resultado.textContent = "Obtendo sua localização...";
 
-    // Calcular custo estimado
-    const custoCombustivel = litrosNecessarios * diesel;
+    navigator.geolocation.getCurrentPosition(
+        function (posicao) {
+            const latitude = posicao.coords.latitude;
+            const longitude = posicao.coords.longitude;
 
-    // Apresentar resultado
-    resultado.innerHTML = `
-        <h3>Resultado da simulação</h3>
+            coordenadasOrigem = {
+                latitude,
+                longitude
+            };
 
-        <p>Distância: ${distancia.toLocaleString("pt-BR")} km</p>
+            origem.value =
+                `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
 
-        <p>Combustível necessário:
-        ${litrosNecessarios.toFixed(2)} litros</p>
+            resultado.textContent =
+                "Localização identificada. Você também pode alterar a origem manualmente.";
+        },
+        function (erro) {
+            resultado.textContent =
+                "Não foi possível obter sua localização. Autorize o acesso ou informe a origem manualmente.";
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 15000
+        }
+    );
+}
 
-        <p>Preço do diesel: ${moeda.format(diesel)}</p>
+// Botão para usar localização atual
+botaoLocalizacao.addEventListener("click", obterLocalizacao);
 
-        <h3>Custo estimado:
-        ${moeda.format(custoCombustivel)}</h3>
-    `;
+// Tentar obter a localização ao abrir o simulador
+obterLocalizacao();
+
+// Limpar coordenadas se a pessoa alterar manualmente a origem
+origem.addEventListener("input", function () {
+    coordenadasOrigem = null;
 });
