@@ -10,7 +10,7 @@ html {
 }
 
 body {
-    font-family: Arial, sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
     background: #f3f5f8;
     color: #1e293b;
 }
@@ -26,6 +26,7 @@ body {
     left: 0;
     top: 0;
     padding: 30px 20px;
+    z-index: 10;
 }
 
 .logo {
@@ -60,6 +61,7 @@ nav a {
     padding: 14px;
     border-radius: 7px;
     transition: 0.2s;
+    font-size: 14px;
 }
 
 nav a:hover,
@@ -73,6 +75,7 @@ nav a.active {
 .main-content {
     margin-left: 250px;
     padding: 35px;
+    max-width: 1700px;
 }
 
 .topbar {
@@ -85,6 +88,7 @@ nav a.active {
 .topbar h1 {
     font-size: 28px;
     margin-bottom: 8px;
+    color: #142d4e;
 }
 
 .topbar p,
@@ -106,6 +110,7 @@ nav a.active {
 
 section {
     margin-bottom: 40px;
+    scroll-margin-top: 25px;
 }
 
 .section-heading {
@@ -115,6 +120,7 @@ section {
 .section-heading h2 {
     font-size: 20px;
     margin-bottom: 7px;
+    color: #142d4e;
 }
 
 /* INDICADORES */
@@ -129,9 +135,18 @@ section {
 .panel {
     background: white;
     border: 1px solid #e2e8f0;
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 24px;
-    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.04);
+    box-shadow: 0 4px 15px rgba(15, 23, 42, 0.04);
+}
+
+.card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
 .card span {
@@ -154,6 +169,7 @@ section {
 .panel h3 {
     font-size: 17px;
     margin-bottom: 20px;
+    color: #142d4e;
 }
 
 .chart-placeholder {
@@ -169,11 +185,26 @@ section {
 
 /* SIMULADOR */
 
+#simulacao .panel {
+    padding: 30px;
+}
+
+#simulacao .panel > h3 {
+    font-size: 18px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 25px;
+}
+
 .simulation-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    margin-bottom: 25px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    margin-bottom: 28px;
+}
+
+.simulation-grid > div {
+    min-width: 0;
 }
 
 .simulation-grid label {
@@ -181,41 +212,101 @@ section {
     margin-bottom: 9px;
     font-size: 13px;
     font-weight: bold;
+    color: #334155;
 }
 
-input {
+input,
+select {
     width: 100%;
-    padding: 12px;
+    min-height: 44px;
+    padding: 11px 13px;
     border: 1px solid #cbd5e1;
-    border-radius: 6px;
+    border-radius: 7px;
     outline: none;
+    background: #fff;
+    color: #1e293b;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-input:focus {
+input:focus,
+select:focus {
     border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
 }
+
+input::placeholder {
+    color: #94a3b8;
+}
+
+/* BOTÕES */
 
 button {
     background: #142d4e;
     color: white;
     padding: 13px 22px;
     border: none;
-    border-radius: 6px;
+    border-radius: 7px;
     cursor: pointer;
     font-weight: bold;
+    font-size: 13px;
+    transition: background 0.2s, transform 0.2s;
 }
 
 button:hover {
     background: #24476f;
 }
 
-#resultadoSimulacao {
-    margin-top: 20px;
-    padding: 15px;
-    background: #f1f5f9;
-    border-radius: 7px;
-    color: #334155;
+button:active {
+    transform: scale(0.98);
 }
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#usarLocalizacao {
+    margin-top: 10px;
+    background: #eaf2ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+#usarLocalizacao:hover {
+    background: #dbeafe;
+}
+
+#calcularSimulacao {
+    min-width: 230px;
+    min-height: 46px;
+    font-size: 14px;
+}
+
+/* RESULTADO DA SIMULAÇÃO */
+
+#resultadoSimulacao {
+    margin-top: 25px;
+    padding: 22px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+    color: #334155;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+}
+
+#resultadoSimulacao h3 {
+    color: #142d4e;
+    margin-bottom: 12px;
+}
+
+#resultadoSimulacao p {
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+/* RODAPÉ */
 
 footer {
     padding: 25px 0;
@@ -226,9 +317,9 @@ footer {
 
 /* RESPONSIVIDADE */
 
-@media (max-width: 1000px) {
+@media (max-width: 1100px) {
     .cards {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
@@ -241,6 +332,10 @@ footer {
 
     .logo {
         margin-bottom: 20px;
+    }
+
+    nav {
+        gap: 5px;
     }
 
     .main-content {
@@ -257,10 +352,18 @@ footer {
     .simulation-grid {
         grid-template-columns: 1fr;
     }
+
+    #simulacao .panel {
+        padding: 20px;
+    }
 }
 
 @media (max-width: 450px) {
     .cards {
         grid-template-columns: 1fr;
+    }
+
+    .main-content {
+        padding: 15px;
     }
 }
