@@ -1,18 +1,23 @@
 
-/* =====================================================
+"use strict";
+
+/* =========================================================
    FREIGHT ANALYTICS | AGRÁRIA
-   Dashboard + Perfis demonstrativos
-   ===================================================== */
-
-/* =========================
-   VARIÁVEIS GLOBAIS
-========================= */
-
-let graficoCustos = null;
-let graficoLSTM = null;
-let perfilAtual = null;
+   Integração de perfis, cadastro, indicadores e simulação
+========================================================= */
 
 const CHAVE_FRETES = "freightAnalytics_fretes";
+const CHAVE_CONTADOR = "freightAnalytics_contador";
+
+let perfilAtual = null;
+let dadosPython = null;
+let graficoCustos = null;
+let graficoLSTM = null;
+let fretes = carregarFretesSalvos();
+
+/* =========================================================
+   DADOS INICIAIS
+========================================================= */
 
 const fretesIniciais = [
     {
@@ -24,7 +29,8 @@ const fretesIniciais = [
         motorista: "Carlos Henrique",
         placa: "ABC-1D23",
         valor: 2800,
-        status: "Disponível"
+        status: "Disponível",
+        data: new Date().toISOString()
     },
     {
         codigo: "FRT002",
@@ -35,18 +41,52 @@ const fretesIniciais = [
         motorista: "João Martins",
         placa: "DEF-4G56",
         valor: 2200,
-        status: "Em transporte"
+        status: "Em transporte",
+        data: new Date().toISOString()
     }
 ];
 
-let fretesDemo = carregarFretesSalvos();
+function carregarFretesSalvos() {
+    try {
+        const salvos = localStorage.getItem(CHAVE_FRETES);
 
-/* =========================
+        if (salvos) {
+            const lista = JSON.parse(salvos);
+            if (Array.isArray(lista)) return lista;
+        }
+    } catch (erro) {
+        console.error("Erro ao carregar fretes:", erro);
+    }
+
+    localStorage.setItem(CHAVE_FRETES, JSON.stringify(fretesIniciais));
+    localStorage.setItem(CHAVE_CONTADOR, "2");
+
+    return [...fretesIniciais];
+}
+
+function salvarFretes() {
+    localStorage.setItem(CHAVE_FRETES, JSON.stringify(fretes));
+}
+
+function proximoCodigo() {
+    let contador = Number(localStorage.getItem(CHAVE_CONTADOR) || 2);
+    contador++;
+    localStorage.setItem(CHAVE_CONTADOR, String(contador));
+
+    return "FRT" + String(contador).padStart(3, "0");
+}
+
+/* =========================================================
    FUNÇÕES AUXILIARES
-========================= */
+========================================================= */
 
 function elemento(id) {
     return document.getElementById(id);
+}
+
+function texto(id, valor) {
+    const el = elemento(id);
+    if (el) el.textContent = valor;
 }
 
 function formatarMoeda(valor) {
@@ -56,191 +96,797 @@ function formatarMoeda(valor) {
     });
 }
 
-function atualizarTexto(id, valor) {
-    const campo = elemento(id);
-
-    if (campo) {
-        campo.textContent = valor;
-    }
+function formatarNumero(valor, casas = 2) {
+    return Number(valor || 0).toLocaleString("pt-BR", {
+        minimumFractionDigits: casas,
+        maximumFractionDigits: casas
+    });
 }
 
-function carregarFretesSalvos() {
-    try {
-        const dados = localStorage.getItem(CHAVE_FRETES);
+function criarElemento(tag, classe, conteudo) {
+    const el = document.createElement(tag);
 
-        if (dados) {
-            const fretes = JSON.parse(dados);
+    if (classe) el.className = classe;
+    if (conteudo !== undefined) el.textContent = conteudo;
 
-            if (Array.isArray(fretes)) {
-                return fretes;
+    return el;
+}
+
+/* =========================================================
+   ESTILOS DOS PAINÉIS DE PERFIL
+========================================================= */
+
+function adicionarEstilosPerfis() {
+    if (elemento("estilosPerfis")) return;
+
+    const style = document.createElement("style");
+    style.id = "estilosPerfis";
+
+    style.textContent = `
+        .profile-screen {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 30px 20px;
+            background: #f4f6fa;
+            font-family: Arial, sans-serif;
+        }
+
+        .profile-card {
+            width: 100%;
+            max-width: 760px;
+            background: #fff;
+            padding: 42px;
+            border-radius: 16px;
+            box-shadow: 0 10px 35px rgba(16,39,68,.10);
+            text-align: center;
+        }
+
+        .profile-card h1 {
+            color: #102744;
+            margin-bottom: 10px;
+        }
+
+        .profile-card > p {
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+
+        .profile-options {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .profile-option {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 28px 18px;
+            background: #fff;
+            cursor: pointer;
+            transition: .2s;
+            color: #102744;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .profile-option:hover {
+            border-color: #2563eb;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(37,99,235,.10);
+        }
+
+        .profile-option span {
+            display: block;
+            margin-top: 10px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #64748b;
+            font-weight: normal;
+        }
+
+        .driver-screen {
+            min-height: 100vh;
+            padding: 35px 20px;
+            background: #f4f6fa;
+            font-family: Arial, sans-serif;
+        }
+
+        .driver-container {
+            max-width: 850px;
+            margin: 0 auto;
+        }
+
+        .driver-panel {
+            background: #fff;
+            padding: 28px;
+            border-radius: 14px;
+            box-shadow: 0 5px 20px rgba(16,39,68,.07);
+            margin-bottom: 22px;
+        }
+
+        .driver-panel h1,
+        .driver-panel h2 {
+            color: #102744;
+            margin-bottom: 12px;
+        }
+
+        .driver-search {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .driver-search input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .driver-search button,
+        .driver-back {
+            background: #102744;
+            color: white;
+            border: 0;
+            border-radius: 7px;
+            padding: 12px 18px;
+            cursor: pointer;
+        }
+
+        .driver-result {
+            margin-top: 18px;
+            padding: 18px;
+            background: #f4f6fa;
+            border-radius: 9px;
+            line-height: 1.8;
+        }
+
+        .freight-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 14px;
+        }
+
+        .freight-card h3 {
+            color: #102744;
+            margin-bottom: 10px;
+        }
+
+        .freight-card p {
+            margin: 5px 0;
+            color: #475569;
+        }
+
+        .freight-card button {
+            margin-top: 12px;
+            margin-right: 8px;
+            padding: 9px 13px;
+            border: 0;
+            border-radius: 6px;
+            background: #2563eb;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .freight-status {
+            display: inline-block;
+            padding: 5px 9px;
+            border-radius: 20px;
+            background: #eaf2ff;
+            color: #1d4ed8;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        #painelQRCode {
+            margin-top: 20px;
+        }
+
+        #painelQRCode canvas,
+        #painelQRCode img {
+            display: block;
+            margin: 15px 0;
+        }
+
+        @media (max-width: 600px) {
+            .profile-options {
+                grid-template-columns: 1fr;
+            }
+
+            .profile-card {
+                padding: 28px 18px;
+            }
+
+            .driver-search {
+                flex-direction: column;
             }
         }
-    } catch (erro) {
-        console.error("Erro ao recuperar fretes:", erro);
-    }
+    `;
 
-    return [...fretesIniciais];
+    document.head.appendChild(style);
 }
 
-function salvarFretes() {
-    try {
-        localStorage.setItem(
-            CHAVE_FRETES,
-            JSON.stringify(fretesDemo)
+/* =========================================================
+   SELEÇÃO DE PERFIL
+========================================================= */
+
+function mostrarSelecaoPerfil() {
+    perfilAtual = null;
+
+    const dashboard = elemento("dashboard");
+    if (dashboard) dashboard.style.display = "none";
+
+    const motorista = elemento("painelCaminhoneiro");
+    if (motorista) motorista.remove();
+
+    let tela = elemento("selecaoPerfil");
+
+    if (!tela) {
+        tela = document.createElement("div");
+        tela.id = "selecaoPerfil";
+        tela.className = "profile-screen";
+        document.body.appendChild(tela);
+    }
+
+    tela.innerHTML = "";
+
+    const card = criarElemento("div", "profile-card");
+    const titulo = criarElemento("h1", "", "FREIGHT ANALYTICS");
+    const subtitulo = criarElemento(
+        "p",
+        "",
+        "AGRÁRIA | Selecione o perfil para continuar"
+    );
+
+    const opcoes = criarElemento("div", "profile-options");
+
+    const empresa = criarElemento("button", "profile-option");
+    empresa.type = "button";
+    empresa.append("Empresa");
+
+    const descricaoEmpresa = criarElemento(
+        "span",
+        "",
+        "Cadastro de fretes, indicadores, custos e simulações"
+    );
+    empresa.appendChild(descricaoEmpresa);
+
+    empresa.addEventListener("click", abrirPerfilEmpresa);
+
+    const caminhoneiro = criarElemento("button", "profile-option");
+    caminhoneiro.type = "button";
+    caminhoneiro.append("Caminhoneiro");
+
+    const descricaoCaminhoneiro = criarElemento(
+        "span",
+        "",
+        "Consultar fretes utilizando o código de identificação"
+    );
+    caminhoneiro.appendChild(descricaoCaminhoneiro);
+
+    caminhoneiro.addEventListener("click", abrirPerfilCaminhoneiro);
+
+    opcoes.append(empresa, caminhoneiro);
+    card.append(titulo, subtitulo, opcoes);
+    tela.appendChild(card);
+}
+
+function abrirPerfilEmpresa() {
+    perfilAtual = "empresa";
+
+    const tela = elemento("selecaoPerfil");
+    if (tela) tela.remove();
+
+    const motorista = elemento("painelCaminhoneiro");
+    if (motorista) motorista.remove();
+
+    const dashboard = elemento("dashboard");
+
+    if (dashboard) {
+        dashboard.style.display = "block";
+    }
+
+    carregarDadosPython();
+    renderizarFretesEmpresa();
+    configurarBotaoTrocarPerfil();
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function abrirPerfilCaminhoneiro() {
+    perfilAtual = "caminhoneiro";
+
+    const tela = elemento("selecaoPerfil");
+    if (tela) tela.remove();
+
+    const dashboard = elemento("dashboard");
+    if (dashboard) dashboard.style.display = "none";
+
+    criarPainelCaminhoneiro();
+}
+
+function configurarBotaoTrocarPerfil() {
+    const botao = elemento("btnTrocarPerfil");
+
+    if (!botao) return;
+
+    botao.onclick = mostrarSelecaoPerfil;
+}
+
+/* =========================================================
+   PAINEL DO CAMINHONEIRO
+========================================================= */
+
+function criarPainelCaminhoneiro() {
+    let painel = elemento("painelCaminhoneiro");
+
+    if (!painel) {
+        painel = document.createElement("div");
+        painel.id = "painelCaminhoneiro";
+        painel.className = "driver-screen";
+        document.body.appendChild(painel);
+    }
+
+    painel.innerHTML = "";
+
+    const container = criarElemento("div", "driver-container");
+    const cabecalho = criarElemento("div", "driver-panel");
+
+    const titulo = criarElemento("h1", "", "Consulta de fretes");
+    const descricao = criarElemento(
+        "p",
+        "",
+        "Informe o código do frete para consultar os dados da operação."
+    );
+
+    const busca = criarElemento("div", "driver-search");
+    const campo = document.createElement("input");
+
+    campo.type = "text";
+    campo.id = "codigoConsulta";
+    campo.placeholder = "Ex.: FRT001";
+    campo.autocomplete = "off";
+
+    const botaoConsultar = criarElemento(
+        "button",
+        "",
+        "Consultar"
+    );
+    botaoConsultar.type = "button";
+
+    botaoConsultar.addEventListener("click", consultarFreteCaminhoneiro);
+
+    campo.addEventListener("keydown", (evento) => {
+        if (evento.key === "Enter") consultarFreteCaminhoneiro();
+    });
+
+    busca.append(campo, botaoConsultar);
+
+    const resultado = criarElemento("div", "driver-result");
+    resultado.id = "resultadoConsulta";
+    resultado.textContent = "Digite o código do frete para iniciar a consulta.";
+
+    cabecalho.append(titulo, descricao, busca, resultado);
+
+    const listaPainel = criarElemento("div", "driver-panel");
+    const tituloLista = criarElemento("h2", "", "Fretes disponíveis");
+    const lista = criarElemento("div");
+    lista.id = "listaFretesCaminhoneiro";
+
+    const voltar = criarElemento(
+        "button",
+        "driver-back",
+        "Trocar perfil"
+    );
+    voltar.type = "button";
+    voltar.addEventListener("click", mostrarSelecaoPerfil);
+
+    listaPainel.append(tituloLista, lista);
+    container.append(cabecalho, listaPainel, voltar);
+    painel.appendChild(container);
+
+    renderizarFretesCaminhoneiro();
+}
+
+function consultarFreteCaminhoneiro() {
+    if (perfilAtual !== "caminhoneiro") return;
+
+    const campo = elemento("codigoConsulta");
+    const resultado = elemento("resultadoConsulta");
+
+    if (!campo || !resultado) return;
+
+    const codigo = campo.value.trim().toUpperCase();
+
+    if (!codigo) {
+        resultado.textContent = "Digite um código de frete.";
+        return;
+    }
+
+    const frete = fretes.find(
+        item => String(item.codigo).toUpperCase() === codigo
+    );
+
+    resultado.innerHTML = "";
+
+    if (!frete) {
+        resultado.textContent = "Nenhum frete encontrado com esse código.";
+        return;
+    }
+
+    const titulo = criarElemento("h3", "", `Frete ${frete.codigo}`);
+    const dados = [
+        `Origem: ${frete.origem}`,
+        `Destino: ${frete.destino}`,
+        `Carga: ${frete.carga}`,
+        `Peso: ${formatarNumero(frete.peso, 1)} toneladas`,
+        `Motorista: ${frete.motorista}`,
+        `Placa: ${frete.placa}`,
+        `Valor: ${formatarMoeda(frete.valor)}`,
+        `Status: ${frete.status}`
+    ];
+
+    resultado.appendChild(titulo);
+
+    dados.forEach(item => {
+        resultado.appendChild(criarElemento("p", "", item));
+    });
+}
+
+function renderizarFretesCaminhoneiro() {
+    const lista = elemento("listaFretesCaminhoneiro");
+    if (!lista) return;
+
+    lista.innerHTML = "";
+
+    if (fretes.length === 0) {
+        lista.textContent = "Nenhum frete cadastrado.";
+        return;
+    }
+
+    [...fretes].reverse().forEach(frete => {
+        const card = criarElemento("div", "freight-card");
+        card.appendChild(
+            criarElemento("h3", "", `Frete ${frete.codigo}`)
         );
-    } catch (erro) {
-        console.error("Erro ao salvar fretes:", erro);
-        alert("Não foi possível salvar os fretes neste navegador.");
-    }
+        card.appendChild(
+            criarElemento("p", "", `${frete.origem} → ${frete.destino}`)
+        );
+        card.appendChild(
+            criarElemento("p", "", `Carga: ${frete.carga}`)
+        );
+        card.appendChild(
+            criarElemento("p", "", `Status: ${frete.status}`)
+        );
+
+        const botao = criarElemento("button", "", "Consultar");
+        botao.type = "button";
+        botao.addEventListener("click", () => {
+            const campo = elemento("codigoConsulta");
+            if (campo) campo.value = frete.codigo;
+            consultarFreteCaminhoneiro();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+
+        card.appendChild(botao);
+        lista.appendChild(card);
+    });
 }
 
-/* =========================
-   CARREGAMENTO DOS DADOS
-========================= */
+/* =========================================================
+   CADASTRO E LISTAGEM DE FRETES
+========================================================= */
+
+function configurarCadastroFrete() {
+    const formulario = elemento("formFreteDemo");
+    if (!formulario) return;
+
+    formulario.addEventListener("submit", (evento) => {
+        evento.preventDefault();
+
+        if (perfilAtual !== "empresa") return;
+
+        const origem = elemento("demoOrigem").value.trim();
+        const destino = elemento("demoDestino").value.trim();
+        const carga = elemento("demoCarga").value.trim();
+        const peso = Number(elemento("demoPeso").value);
+        const motorista = elemento("demoMotorista").value.trim();
+        const placa = elemento("demoPlaca").value.trim().toUpperCase();
+        const valor = Number(elemento("demoValor").value);
+
+        if (
+            !origem || !destino || !carga ||
+            !motorista || !placa ||
+            !Number.isFinite(peso) || peso <= 0 ||
+            !Number.isFinite(valor) || valor < 0
+        ) {
+            alert("Confira os dados preenchidos antes de cadastrar.");
+            return;
+        }
+
+        const novoFrete = {
+            codigo: proximoCodigo(),
+            origem,
+            destino,
+            carga,
+            peso,
+            motorista,
+            placa,
+            valor,
+            status: "Disponível",
+            data: new Date().toISOString()
+        };
+
+        fretes.push(novoFrete);
+        salvarFretes();
+
+        formulario.reset();
+        renderizarFretesEmpresa();
+
+        alert(`Frete ${novoFrete.codigo} cadastrado com sucesso!`);
+
+        gerarQRCode(novoFrete.codigo);
+    });
+}
+
+function renderizarFretesEmpresa() {
+    if (perfilAtual !== "empresa") return;
+
+    const lista = elemento("listaFretesEmpresa");
+    if (!lista) return;
+
+    lista.innerHTML = "";
+
+    if (fretes.length === 0) {
+        lista.textContent = "Nenhum frete cadastrado.";
+        return;
+    }
+
+    [...fretes].reverse().forEach(frete => {
+        const card = criarElemento("div", "freight-card");
+
+        card.appendChild(
+            criarElemento("h3", "", `Frete ${frete.codigo}`)
+        );
+
+        card.appendChild(
+            criarElemento("p", "", `${frete.origem} → ${frete.destino}`)
+        );
+
+        card.appendChild(
+            criarElemento("p", "", `Carga: ${frete.carga}`)
+        );
+
+        card.appendChild(
+            criarElemento(
+                "p",
+                "",
+                `Motorista: ${frete.motorista} | Placa: ${frete.placa}`
+            )
+        );
+
+        card.appendChild(
+            criarElemento(
+                "p",
+                "",
+                `Peso: ${formatarNumero(frete.peso, 1)} t | Valor: ${formatarMoeda(frete.valor)}`
+            )
+        );
+
+        const status = criarElemento("span", "freight-status", frete.status);
+        card.appendChild(status);
+
+        const botaoQR = criarElemento("button", "", "Gerar QR Code");
+        botaoQR.type = "button";
+        botaoQR.addEventListener("click", () => gerarQRCode(frete.codigo));
+
+        const botaoStatus = criarElemento("button", "", "Alterar status");
+        botaoStatus.type = "button";
+        botaoStatus.addEventListener("click", () => alterarStatusFrete(frete.codigo));
+
+        card.append(botaoQR, botaoStatus);
+        lista.appendChild(card);
+    });
+}
+
+function alterarStatusFrete(codigo) {
+    if (perfilAtual !== "empresa") return;
+
+    const frete = fretes.find(item => item.codigo === codigo);
+    if (!frete) return;
+
+    const statusPossiveis = [
+        "Disponível",
+        "Em transporte",
+        "Concluído",
+        "Cancelado"
+    ];
+
+    const atual = statusPossiveis.indexOf(frete.status);
+    const proximo = (atual + 1) % statusPossiveis.length;
+
+    frete.status = statusPossiveis[proximo];
+
+    salvarFretes();
+    renderizarFretesEmpresa();
+
+    alert(`Status do frete ${codigo}: ${frete.status}`);
+}
+
+/* =========================================================
+   QR CODE
+========================================================= */
+
+function carregarBibliotecaQRCode() {
+    return new Promise((resolve) => {
+        if (window.QRCode) {
+            resolve(true);
+            return;
+        }
+
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+
+        document.head.appendChild(script);
+    });
+}
+
+async function gerarQRCode(codigo) {
+    if (perfilAtual !== "empresa") return;
+
+    const painel = elemento("painelQRCode");
+    if (!painel) return;
+
+    painel.innerHTML = "";
+
+    const titulo = criarElemento("h3", "", `QR Code do frete ${codigo}`);
+    const explicacao = criarElemento(
+        "p",
+        "",
+        "Este QR Code contém o código de identificação do frete."
+    );
+
+    const imagem = criarElemento("div");
+    imagem.id = "qrImagem";
+
+    painel.append(titulo, explicacao, imagem);
+
+    const carregou = await carregarBibliotecaQRCode();
+
+    if (perfilAtual !== "empresa") return;
+
+    if (!carregou || !window.QRCode) {
+        imagem.textContent = `Código para consulta: ${codigo}`;
+        return;
+    }
+
+    new QRCode(imagem, {
+        text: codigo,
+        width: 180,
+        height: 180,
+        colorDark: "#102744",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+}
+
+/* =========================================================
+   CARREGAMENTO DOS DADOS PYTHON
+========================================================= */
 
 async function carregarDadosPython() {
     try {
-        const resposta = await fetch("dados.json?v=" + Date.now());
+        const resposta = await fetch("dados.json?v=" + Date.now(), {
+            cache: "no-store"
+        });
 
         if (!resposta.ok) {
             throw new Error("Não foi possível carregar dados.json");
         }
 
-        const dados = await resposta.json();
+        dadosPython = await resposta.json();
 
-        atualizarIndicadores(dados);
-        criarGraficoCustos(dados);
-        atualizarInteligenciaArtificial(dados);
-
-        console.log("Dados do Python carregados com sucesso.");
-
+        atualizarIndicadores();
+        criarGraficoCustos();
+        atualizarInteligenciaArtificial();
+        criarGraficoLSTM();
     } catch (erro) {
-        console.error("Erro ao carregar os dados:", erro);
+        console.error("Erro ao carregar dados Python:", erro);
+
+        texto("totalFretes", "Indisponível");
+        texto("totalRegistros", "Indisponível");
+        texto("custoTotal", "Indisponível");
+        texto("custoMedio", "Indisponível");
     }
 }
 
-/* =========================
-   INDICADORES PRINCIPAIS
-========================= */
+function atualizarIndicadores() {
+    if (!dadosPython) return;
 
-function atualizarIndicadores(dados) {
-    const diesel = dados.diesel || {};
-
-    const indicadores = {
-        totalFretes: dados.totalFretes,
-        totalRegistros: dados.totalRegistros,
-        custoTotal: dados.custoTotal,
-        custoMedio: dados.custoMedio,
-        diesel: diesel.precoMedio
-    };
-
-    const campos = {
-        totalFretes: ["totalFretes", "kpiFretes"],
-        totalRegistros: ["totalRegistros", "kpiRegistros"],
-        custoTotal: ["custoTotal", "kpiCustoTotal"],
-        custoMedio: ["custoMedio", "kpiCustoMedio"],
-        diesel: ["dieselS10", "kpiDiesel", "precoDieselMedio"]
-    };
-
-    Object.entries(campos).forEach(([chave, ids]) => {
-        ids.forEach(id => {
-            const campo = elemento(id);
-            const valor = indicadores[chave];
-
-            if (!campo || valor === undefined || valor === null) {
-                return;
-            }
-
-            campo.textContent =
-                ["custoTotal", "custoMedio", "diesel"].includes(chave)
-                    ? formatarMoeda(valor)
-                    : Number(valor).toLocaleString("pt-BR");
-        });
-    });
-
-    atualizarTexto(
-        "dataDiesel",
-        `Fonte: ${diesel.fonte || "ANP"} | ${diesel.periodo || "--"}`
+    texto(
+        "totalFretes",
+        Number(dadosPython.totalFretes || 0).toLocaleString("pt-BR")
     );
 
-    // Atualiza o preço do diesel nos campos do simulador.
-    ["precoDiesel", "diesel"].forEach(id => {
-        const campo = elemento(id);
+    texto(
+        "totalRegistros",
+        Number(dadosPython.totalRegistros || 0).toLocaleString("pt-BR")
+    );
 
-        if (
-            campo &&
-            diesel.precoMedio !== undefined &&
-            campo.tagName === "INPUT"
-        ) {
-            campo.value = Number(diesel.precoMedio).toFixed(2);
-        }
-    });
+    texto("custoTotal", formatarMoeda(dadosPython.custoTotal));
+    texto("custoMedio", formatarMoeda(dadosPython.custoMedio));
+
+    const diesel = dadosPython.diesel || {};
+
+    texto(
+        "dieselS10",
+        diesel.precoMedio != null
+            ? formatarMoeda(diesel.precoMedio) + "/L"
+            : "--"
+    );
+
+    texto(
+        "dataDiesel",
+        diesel.periodo
+            ? `Período: ${diesel.periodo} | Fonte: ${diesel.fonte || "ANP"}`
+            : `Fonte: ${diesel.fonte || "ANP"}`
+    );
+
+    const campoDiesel = elemento("diesel");
+
+    if (campoDiesel && diesel.precoMedio != null && !campoDiesel.value) {
+        campoDiesel.value = Number(diesel.precoMedio).toFixed(2);
+    }
 }
 
-/* =========================
-   GRÁFICO DE CUSTOS
-========================= */
+/* =========================================================
+   GRÁFICO DE CUSTOS MENSAIS
+========================================================= */
 
-function criarGraficoCustos(dados) {
+function criarGraficoCustos() {
+    if (!dadosPython || !window.Chart) return;
+
     const canvas = elemento("graficoCustosChart");
+    if (!canvas) return;
 
-    if (!canvas || typeof Chart === "undefined") {
-        return;
-    }
+    const custos = dadosPython.custosMensais || {};
+    const labels = custos.labels || [];
+    const valores = custos.valores || [];
 
-    const registros = dados.custosMensais || {};
-
-    const labels = registros.labels || [];
-    const valores = registros.valores || [];
-
-    if (!labels.length || !valores.length) {
-        console.warn("Dados mensais não encontrados.");
-        return;
-    }
-
-    if (graficoCustos) {
-        graficoCustos.destroy();
-    }
+    if (graficoCustos) graficoCustos.destroy();
 
     graficoCustos = new Chart(canvas, {
-        type: "line",
-
+        type: "bar",
         data: {
-            labels: labels,
-
+            labels,
             datasets: [{
-                label: "Custo dos fretes",
+                label: "Custo mensal de frete",
                 data: valores,
-                borderColor: "#2563eb",
-                backgroundColor: "rgba(37, 99, 235, 0.12)",
-                borderWidth: 2,
-                fill: true,
-                tension: 0.3,
-                pointRadius: 3
+                backgroundColor: "#2563eb",
+                borderRadius: 5
             }]
         },
-
         options: {
             responsive: true,
             maintainAspectRatio: false,
-
             plugins: {
                 legend: {
                     display: true
                 },
-
                 tooltip: {
                     callbacks: {
-                        label: contexto =>
-                            formatarMoeda(contexto.raw)
+                        label: contexto => formatarMoeda(contexto.raw)
                     }
                 }
             },
-
             scales: {
                 y: {
                     beginAtZero: true,
-
                     ticks: {
                         callback: valor => formatarMoeda(valor)
                     }
@@ -250,163 +896,321 @@ function criarGraficoCustos(dados) {
     });
 }
 
-/* =========================
-   INTELIGÊNCIA ARTIFICIAL
-========================= */
+/* =========================================================
+   INDICADORES E GRÁFICO LSTM
+========================================================= */
 
-function atualizarInteligenciaArtificial(dados) {
-    const ia = dados.lstm || {};
+function atualizarInteligenciaArtificial() {
+    if (!dadosPython) return;
 
-    atualizarTexto(
-        "maeLSTM",
-        ia.mae !== undefined ? formatarMoeda(ia.mae) : "--"
+    const lstm = dadosPython.lstm || {};
+
+    texto("lstmMAE", formatarNumero(lstm.mae));
+    texto("lstmRMSE", formatarNumero(lstm.rmse));
+    texto("lstmR2", formatarNumero(lstm.r2, 4));
+
+    texto(
+        "totalPrevisoes",
+        Number(lstm.quantidadePrevisoes || 0).toLocaleString("pt-BR")
     );
-
-    atualizarTexto(
-        "rmseLSTM",
-        ia.rmse !== undefined ? formatarMoeda(ia.rmse) : "--"
-    );
-
-    atualizarTexto(
-        "r2LSTM",
-        ia.r2 !== undefined
-            ? Number(ia.r2).toFixed(4)
-            : "--"
-    );
-
-    atualizarTexto(
-        "totalPredicoes",
-        Number(ia.quantidadePrevisoes || 0).toLocaleString("pt-BR")
-    );
-
-    criarGraficoLSTM(dados);
 }
 
-/* =========================
-   GRÁFICO LSTM
-========================= */
+function criarGraficoLSTM() {
+    if (!dadosPython || !window.Chart) return;
 
-function criarGraficoLSTM(dados) {
     const canvas = elemento("graficoLSTM");
+    if (!canvas) return;
 
-    if (!canvas || typeof Chart === "undefined") {
-        return;
-    }
+    const previsoes = dadosPython.lstm?.previsoes || [];
 
-    const previsoes = dados.lstm?.previsoes || [];
+    if (graficoLSTM) graficoLSTM.destroy();
 
-    if (!previsoes.length) {
-        return;
-    }
+    if (!previsoes.length) return;
 
-    // Limita a amostra para manter o gráfico legível.
-    const quantidade = Math.min(150, previsoes.length);
-    const passo = previsoes.length / quantidade;
+    // Limita a quantidade de pontos para manter o gráfico legível.
+    const limite = 150;
+    const passo = Math.max(1, Math.ceil(previsoes.length / limite));
 
-    const amostra = Array.from(
-        { length: quantidade },
-        (_, indice) => previsoes[Math.floor(indice * passo)]
-    );
+    const amostra = previsoes.filter((item, indice) => {
+        return indice % passo === 0;
+    });
 
-    const labels = amostra.map(item => item.data);
-    const reais = amostra.map(item => Number(item.real));
-    const previstos = amostra.map(item => Number(item.previsto));
+    const labels = amostra.map((item, indice) => {
+        return item.data ? `${item.data} (${indice + 1})` : `Registro ${indice + 1}`;
+    });
 
-    if (graficoLSTM) {
-        graficoLSTM.destroy();
-    }
+    const valoresReais = amostra.map(item => item.real ?? null);
+    const valoresPrevistos = amostra.map(item => item.previsto ?? null);
 
     graficoLSTM = new Chart(canvas, {
         type: "line",
-
         data: {
-            labels: labels,
-
+            labels,
             datasets: [
                 {
-                    label: "Valores reais",
-                    data: reais,
-                    borderColor: "#2563eb",
+                    label: "Valor real",
+                    data: valoresReais,
+                    borderColor: "#102744",
+                    backgroundColor: "rgba(16,39,68,.08)",
                     borderWidth: 2,
-                    pointRadius: 0,
+                    pointRadius: 1,
                     tension: 0.2
                 },
                 {
-                    label: "Valores previstos",
-                    data: previstos,
-                    borderColor: "#f59e0b",
+                    label: "Valor previsto",
+                    data: valoresPrevistos,
+                    borderColor: "#2563eb",
+                    backgroundColor: "rgba(37,99,235,.08)",
                     borderWidth: 2,
-                    pointRadius: 0,
+                    pointRadius: 1,
                     tension: 0.2
                 }
             ]
         },
-
         options: {
             responsive: true,
             maintainAspectRatio: false,
-
+            interaction: {
+                intersect: false,
+                mode: "index"
+            },
             plugins: {
                 legend: {
                     display: true
                 }
             },
-
             scales: {
+                x: {
+                    ticks: {
+                        maxTicksLimit: 10
+                    }
+                },
                 y: {
-                    beginAtZero: true
+                    beginAtZero: false
                 }
             }
         }
     });
 }
 
-/* =========================
-   LOCALIZAÇÃO
-========================= */
+/* =========================================================
+   SIMULAÇÃO DE TRANSPORTE
+========================================================= */
 
-async function obterLocalizacao() {
+function configurarSimulacao() {
+    const tipo = elemento("tipoPercurso");
+    const botao = elemento("calcularSimulacao");
+    const localizacao = elemento("usarLocalizacao");
+
+    if (tipo) {
+        tipo.addEventListener("change", atualizarCampoRetorno);
+        atualizarCampoRetorno();
+    }
+
+    if (botao) {
+        botao.addEventListener("click", calcularSimulacao);
+    }
+
+    if (localizacao) {
+        localizacao.addEventListener("click", usarMinhaLocalizacao);
+    }
+}
+
+function atualizarCampoRetorno() {
+    const tipo = elemento("tipoPercurso");
+    const campo = elemento("campoRetorno");
+    const destinoRetorno = elemento("destinoRetorno");
+
+    if (!tipo || !campo) return;
+
+    const personalizado = tipo.value === "personalizado";
+
+    campo.style.display = personalizado ? "block" : "none";
+
+    if (destinoRetorno) {
+        destinoRetorno.required = personalizado;
+    }
+}
+
+async function geocodificar(endereco) {
+    const url =
+        "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
+        encodeURIComponent(endereco);
+
+    const resposta = await fetch(url, {
+        headers: {
+            "Accept": "application/json"
+        }
+    });
+
+    if (!resposta.ok) {
+        throw new Error("Falha ao localizar o endereço.");
+    }
+
+    const resultados = await resposta.json();
+
+    if (!resultados.length) {
+        throw new Error(`Endereço não encontrado: ${endereco}`);
+    }
+
+    return {
+        lat: Number(resultados[0].lat),
+        lon: Number(resultados[0].lon)
+    };
+}
+
+async function obterDistancia(origem, destino) {
+    const pontoOrigem = await geocodificar(origem);
+    const pontoDestino = await geocodificar(destino);
+
+    const coordenadas =
+        `${pontoOrigem.lon},${pontoOrigem.lat};` +
+        `${pontoDestino.lon},${pontoDestino.lat}`;
+
+    const url =
+        `https://router.project-osrm.org/route/v1/driving/${coordenadas}` +
+        "?overview=false";
+
+    const resposta = await fetch(url);
+
+    if (!resposta.ok) {
+        throw new Error("Não foi possível calcular a rota.");
+    }
+
+    const dados = await resposta.json();
+
+    if (!dados.routes || !dados.routes.length) {
+        throw new Error("Não foi encontrada uma rota entre os locais.");
+    }
+
+    return dados.routes[0].distance / 1000;
+}
+
+async function calcularSimulacao() {
+    if (perfilAtual !== "empresa") return;
+
+    const origem = elemento("origem")?.value.trim();
+    const destino = elemento("destino")?.value.trim();
+    const consumo = Number(elemento("consumo")?.value);
+    const precoDiesel = Number(elemento("diesel")?.value);
+    const tipoPercurso = elemento("tipoPercurso")?.value;
+    const retorno = elemento("destinoRetorno")?.value.trim();
+    const resultado = elemento("resultadoSimulacao");
+
+    if (!resultado) return;
+
+    if (!origem || !destino || consumo <= 0 || precoDiesel <= 0) {
+        resultado.textContent =
+            "Preencha origem, destino, consumo e preço do diesel corretamente.";
+        return;
+    }
+
+    if (tipoPercurso === "personalizado" && !retorno) {
+        resultado.textContent = "Informe o destino do retorno.";
+        return;
+    }
+
+    resultado.textContent = "Calculando rota e estimando custos...";
+
+    const botao = elemento("calcularSimulacao");
+    if (botao) botao.disabled = true;
+
+    try {
+        const distanciaIda = await obterDistancia(origem, destino);
+        let distanciaTotal = distanciaIda;
+        let descricaoPercurso = "Somente ida";
+
+        if (tipoPercurso === "ida_volta") {
+            const distanciaVolta = await obterDistancia(destino, origem);
+            distanciaTotal = distanciaIda + distanciaVolta;
+            descricaoPercurso = "Ida e volta";
+        }
+
+        if (tipoPercurso === "personalizado") {
+            const distanciaVolta = await obterDistancia(destino, retorno);
+            distanciaTotal = distanciaIda + distanciaVolta;
+            descricaoPercurso = `Retorno para ${retorno}`;
+        }
+
+        const litros = distanciaTotal / consumo;
+        const custo = litros * precoDiesel;
+
+        resultado.innerHTML = "";
+
+        const titulo = criarElemento("h3", "", "Resultado da simulação");
+        const itens = [
+            `Veículo: ${elemento("veiculo")?.value || "Não informado"}`,
+            `Percurso: ${descricaoPercurso}`,
+            `Distância de ida: ${formatarNumero(distanciaIda)} km`,
+            `Distância total: ${formatarNumero(distanciaTotal)} km`,
+            `Consumo estimado: ${formatarNumero(litros)} litros`,
+            `Preço do diesel: ${formatarMoeda(precoDiesel)}/L`,
+            `Custo estimado de combustível: ${formatarMoeda(custo)}`
+        ];
+
+        resultado.appendChild(titulo);
+
+        itens.forEach(item => {
+            resultado.appendChild(criarElemento("p", "", item));
+        });
+
+        resultado.appendChild(
+            criarElemento(
+                "small",
+                "",
+                "Estimativa baseada na rota rodoviária e no consumo informado. Não inclui pedágios, manutenção ou outros custos."
+            )
+        );
+
+    } catch (erro) {
+        console.error("Erro na simulação:", erro);
+        resultado.textContent =
+            erro.message || "Não foi possível concluir a simulação.";
+    } finally {
+        if (botao) botao.disabled = false;
+    }
+}
+
+function usarMinhaLocalizacao() {
     if (!navigator.geolocation) {
         alert("Seu navegador não oferece suporte à localização.");
         return;
     }
 
+    const botao = elemento("usarLocalizacao");
+    if (botao) botao.disabled = true;
+
     navigator.geolocation.getCurrentPosition(
-        async posicao => {
-            const latitude = posicao.coords.latitude;
-            const longitude = posicao.coords.longitude;
-
-            const campo = elemento("origem");
-
-            if (campo) {
-                campo.value = `${latitude}, ${longitude}`;
-            }
-
+        async (posicao) => {
             try {
-                const resposta = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`
-                );
+                const lat = posicao.coords.latitude;
+                const lon = posicao.coords.longitude;
 
-                if (!resposta.ok) {
-                    throw new Error("Erro ao consultar endereço.");
-                }
+                const url =
+                    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
 
+                const resposta = await fetch(url);
                 const dados = await resposta.json();
 
-                if (campo && dados.display_name) {
-                    campo.value = dados.display_name;
-                }
+                const endereco = dados.display_name;
 
+                if (endereco && elemento("origem")) {
+                    elemento("origem").value = endereco;
+                } else {
+                    elemento("origem").value = `${lat}, ${lon}`;
+                }
             } catch (erro) {
-                console.error("Erro ao consultar endereço:", erro);
+                console.error("Erro ao obter endereço:", erro);
+                alert("Localização obtida, mas não foi possível converter em endereço.");
+            } finally {
+                if (botao) botao.disabled = false;
             }
         },
-
-        erro => {
-            console.error(erro);
-            alert("Não foi possível obter sua localização.");
+        (erro) => {
+            console.error("Erro de localização:", erro);
+            alert("Não foi possível acessar sua localização. Verifique a permissão do navegador.");
+            if (botao) botao.disabled = false;
         },
-
         {
             enableHighAccuracy: true,
             timeout: 15000
@@ -414,976 +1218,19 @@ async function obterLocalizacao() {
     );
 }
 
-/* =========================
-   BUSCA DE COORDENADAS
-========================= */
-
-async function buscarCoordenadas(endereco) {
-    const resposta = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endereco)}`
-    );
-
-    if (!resposta.ok) {
-        throw new Error("Erro ao consultar localização.");
-    }
-
-    const dados = await resposta.json();
-
-    if (!dados.length) {
-        throw new Error("Endereço não encontrado: " + endereco);
-    }
-
-    return {
-        lat: Number(dados[0].lat),
-        lon: Number(dados[0].lon)
-    };
-}
-
-/* =========================
-   BUSCA DE ROTAS
-========================= */
-
-async function buscarRota(origem, destino) {
-    const url =
-        `https://router.project-osrm.org/route/v1/driving/` +
-        `${origem.lon},${origem.lat};${destino.lon},${destino.lat}` +
-        "?overview=false";
-
-    const resposta = await fetch(url);
-
-    if (!resposta.ok) {
-        throw new Error("Erro ao consultar a rota.");
-    }
-
-    const dados = await resposta.json();
-
-    if (
-        dados.code !== "Ok" ||
-        !dados.routes ||
-        !dados.routes.length
-    ) {
-        throw new Error("Não foi possível encontrar a rota.");
-    }
-
-    return dados.routes[0];
-}
-
-/* =========================
-   SIMULAÇÃO DE FRETE
-========================= */
-
-async function calcularSimulacao() {
-    const origem = elemento("origem")?.value.trim();
-    const destino = elemento("destino")?.value.trim();
-
-    const consumo = Number(
-        elemento("consumo")?.value ||
-        elemento("consumoVeiculo")?.value
-    );
-
-    const precoDiesel = Number(
-        elemento("precoDiesel")?.value ||
-        elemento("diesel")?.value
-    );
-
-    const resultado = elemento("resultadoSimulacao");
-
-    if (!origem || !destino) {
-        alert("Informe a origem e o destino.");
-        return;
-    }
-
-    if (
-        !Number.isFinite(consumo) ||
-        consumo <= 0 ||
-        !Number.isFinite(precoDiesel) ||
-        precoDiesel <= 0
-    ) {
-        alert("Informe um consumo e um preço de diesel válidos.");
-        return;
-    }
-
-    if (resultado) {
-        resultado.textContent = "Calculando rota...";
-    }
-
-    try {
-        const coordenadasOrigem = await buscarCoordenadas(origem);
-        const coordenadasDestino = await buscarCoordenadas(destino);
-
-        const rotaIda = await buscarRota(
-            coordenadasOrigem,
-            coordenadasDestino
-        );
-
-        const distanciaIda = rotaIda.distance / 1000;
-        const tempoIda = rotaIda.duration / 3600;
-
-        const tipoRota =
-            elemento("tipoRota")?.value ||
-            elemento("tipoPercurso")?.value ||
-            "somente_ida";
-
-        let distanciaTotal = distanciaIda;
-        let tempoTotal = tempoIda;
-        let distanciaRetorno = 0;
-
-        if (tipoRota === "ida_volta") {
-            distanciaRetorno = distanciaIda;
-        }
-
-        if (tipoRota === "personalizado") {
-            const destinoRetorno = elemento("destinoRetorno")?.value.trim();
-
-            if (!destinoRetorno) {
-                alert("Informe o destino de retorno.");
-                return;
-            }
-
-            const coordenadasRetorno =
-                await buscarCoordenadas(destinoRetorno);
-
-            const rotaRetorno = await buscarRota(
-                coordenadasDestino,
-                coordenadasRetorno
-            );
-
-            distanciaRetorno = rotaRetorno.distance / 1000;
-            tempoTotal += rotaRetorno.duration / 3600;
-        }
-
-        distanciaTotal += distanciaRetorno;
-
-        const litrosTotal = distanciaTotal / consumo;
-        const custoTotal = litrosTotal * precoDiesel;
-
-        if (resultado) {
-            resultado.innerHTML = "";
-
-            const titulo = document.createElement("h3");
-            titulo.textContent = "Resultado da simulação";
-
-            const informacoes = [
-                `Distância de ida: ${distanciaIda.toFixed(1)} km`,
-                `Distância de retorno: ${distanciaRetorno.toFixed(1)} km`,
-                `Distância total: ${distanciaTotal.toFixed(1)} km`,
-                `Tempo estimado: ${tempoTotal.toFixed(1)} horas`,
-                `Combustível estimado: ${litrosTotal.toFixed(1)} litros`,
-                `Preço do diesel: ${formatarMoeda(precoDiesel)}`,
-                `Custo estimado: ${formatarMoeda(custoTotal)}`
-            ];
-
-            resultado.appendChild(titulo);
-
-            informacoes.forEach(texto => {
-                const paragrafo = document.createElement("p");
-                paragrafo.textContent = texto;
-                resultado.appendChild(paragrafo);
-            });
-        }
-
-    } catch (erro) {
-        console.error("Erro na simulação:", erro);
-
-        if (resultado) {
-            resultado.textContent =
-                "Não foi possível calcular a rota. Verifique os endereços e tente novamente.";
-        }
-    }
-}
-
-/* =========================
-   CAMPO DE RETORNO
-========================= */
-
-function controlarCampoRetorno() {
-    const tipo =
-        elemento("tipoRota") ||
-        elemento("tipoPercurso");
-
-    const campo = elemento("campoRetorno");
-
-    if (!tipo || !campo) {
-        return;
-    }
-
-    campo.style.display =
-        tipo.value === "personalizado" ? "block" : "none";
-}
-
-/* =====================================================
-   PERFIS DEMONSTRATIVOS
-===================================================== */
-
-/* =========================
-   BIBLIOTECA QR CODE
-========================= */
-
-function carregarBibliotecaQR() {
-    if (window.QRCode) {
-        return Promise.resolve();
-    }
-
-    if (window.promessaQRCode) {
-        return window.promessaQRCode;
-    }
-
-    window.promessaQRCode = new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-
-        script.src =
-            "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
-
-        script.onload = resolve;
-
-        script.onerror = () => {
-            window.promessaQRCode = null;
-            reject(new Error("Não foi possível carregar o QR Code."));
-        };
-
-        document.head.appendChild(script);
-    });
-
-    return window.promessaQRCode;
-}
-
-/* =========================
-   INTERFACE DOS PERFIS
-========================= */
-
-function criarInterfacePerfis() {
-    if (elemento("areaPerfis")) {
-        return;
-    }
-
-    const estilos = document.createElement("style");
-
-    estilos.textContent = `
-        #areaPerfis {
-            position: fixed;
-            inset: 0;
-            z-index: 99999;
-            background: #f3f5f8;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            overflow-y: auto;
-            font-family: Arial, sans-serif;
-        }
-
-        .perfil-container {
-            width: 100%;
-            max-width: 850px;
-            margin: auto;
-        }
-
-        .perfil-titulo {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #172033;
-        }
-
-        .perfil-titulo h1 {
-            margin-bottom: 10px;
-            font-size: 30px;
-        }
-
-        .perfil-titulo p {
-            color: #64748b;
-        }
-
-        .perfil-opcoes {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 20px;
-        }
-
-        .perfil-card {
-            background: white;
-            padding: 30px;
-            border-radius: 14px;
-            border: 1px solid #e2e8f0;
-            cursor: pointer;
-            transition: .2s;
-            text-align: center;
-        }
-
-        .perfil-card:hover {
-            transform: translateY(-4px);
-            border-color: #2563eb;
-            box-shadow: 0 8px 25px rgba(0,0,0,.08);
-        }
-
-        .perfil-card h2 {
-            color: #172033;
-            margin-bottom: 12px;
-        }
-
-        .perfil-card p {
-            color: #64748b;
-            line-height: 1.5;
-            margin-bottom: 20px;
-        }
-
-        .perfil-botao {
-            background: #2563eb;
-            color: white;
-            border: 0;
-            padding: 12px 20px;
-            border-radius: 7px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .perfil-botao:hover {
-            background: #1d4ed8;
-        }
-
-        .perfil-painel {
-            background: white;
-            padding: 25px;
-            border-radius: 12px;
-            width: 100%;
-            max-width: 900px;
-            margin: auto;
-            box-shadow: 0 5px 25px rgba(0,0,0,.06);
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .perfil-painel h2 {
-            margin-bottom: 20px;
-            color: #172033;
-        }
-
-        .perfil-painel input,
-        .perfil-painel select {
-            width: 100%;
-            padding: 11px;
-            margin: 7px 0 14px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            box-sizing: border-box;
-        }
-
-        .perfil-painel label {
-            font-size: 13px;
-            font-weight: bold;
-            color: #334155;
-        }
-
-        .perfil-frete {
-            padding: 15px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            margin: 12px 0;
-            background: #fff;
-        }
-
-        .perfil-frete p {
-            margin: 6px 0;
-            color: #475569;
-        }
-
-        .perfil-acoes {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 15px;
-        }
-
-        .perfil-secundario {
-            background: #64748b;
-            color: white;
-            border: 0;
-            padding: 11px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        #botaoTrocarPerfil {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 99998;
-            background: #172033;
-            color: white;
-            border: 0;
-            border-radius: 8px;
-            padding: 13px 18px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,.2);
-        }
-
-        @media(max-width: 600px) {
-            .perfil-titulo h1 {
-                font-size: 24px;
-            }
-
-            .perfil-painel {
-                padding: 18px;
-            }
-        }
-    `;
-
-    document.head.appendChild(estilos);
-
-    const area = document.createElement("div");
-    area.id = "areaPerfis";
-
-    document.body.appendChild(area);
-
-    mostrarSelecaoPerfis();
-}
-
-/* =========================
-   SELEÇÃO DE PERFIL
-========================= */
-
-function mostrarSelecaoPerfis() {
-    const area = elemento("areaPerfis");
-
-    if (!area) return;
-
-    perfilAtual = null;
-
-    area.style.display = "flex";
-
-    const botao = elemento("botaoTrocarPerfil");
-
-    if (botao) {
-        botao.remove();
-    }
-
-    area.innerHTML = `
-        <div class="perfil-container">
-
-            <div class="perfil-titulo">
-                <h1>Freight Analytics | Agrária</h1>
-                <p>Selecione um perfil para acessar o ambiente demonstrativo.</p>
-                <p><strong>Ambiente de demonstração</strong></p>
-            </div>
-
-            <div class="perfil-opcoes">
-
-                <div class="perfil-card" onclick="abrirPerfil('empresa')">
-                    <h2>Empresa</h2>
-                    <p>Cadastre fretes, acompanhe registros e acesse a análise de custos.</p>
-                    <button class="perfil-botao">Acessar como empresa</button>
-                </div>
-
-                <div class="perfil-card" onclick="abrirPerfil('caminhoneiro')">
-                    <h2>Caminhoneiro</h2>
-                    <p>Consulte fretes disponíveis e visualize informações de transporte.</p>
-                    <button class="perfil-botao">Acessar como caminhoneiro</button>
-                </div>
-
-            </div>
-        </div>
-    `;
-}
-
-function abrirPerfil(perfil) {
-    perfilAtual = perfil;
-
-    if (perfil === "empresa") {
-        mostrarPainelEmpresa();
-        return;
-    }
-
-    if (perfil === "caminhoneiro") {
-        mostrarPainelCaminhoneiro();
-    }
-}
-
-/* =========================
-   PAINEL EMPRESA
-========================= */
-
-function mostrarPainelEmpresa() {
-    const area = elemento("areaPerfis");
-
-    if (!area) return;
-
-    area.style.display = "flex";
-
-    area.innerHTML = `
-        <div class="perfil-painel">
-
-            <h2>Painel da Empresa</h2>
-            <p>Cadastro e gerenciamento de fretes demonstrativos.</p>
-
-            <form id="formFreteDemo">
-
-                <label>Origem</label>
-                <input id="demoOrigem" required placeholder="Ex.: Guarapuava - PR">
-
-                <label>Destino</label>
-                <input id="demoDestino" required placeholder="Ex.: Cascavel - PR">
-
-                <label>Tipo de carga</label>
-                <input id="demoCarga" required placeholder="Ex.: Soja">
-
-                <label>Peso (toneladas)</label>
-                <input id="demoPeso" type="number" min="0.1" step="0.1" required>
-
-                <label>Motorista</label>
-                <input id="demoMotorista" required>
-
-                <label>Placa do veículo</label>
-                <input id="demoPlaca" required>
-
-                <label>Valor do frete (R$)</label>
-                <input id="demoValor" type="number" min="0" step="0.01" required>
-
-                <button class="perfil-botao" type="submit">
-                    Cadastrar frete
-                </button>
-
-            </form>
-
-            <hr style="margin:25px 0;border:0;border-top:1px solid #e2e8f0;">
-
-            <h2>Fretes cadastrados</h2>
-
-            <div id="listaFretesEmpresa"></div>
-
-            <div class="perfil-acoes">
-
-                <button class="perfil-botao" onclick="abrirDashboardOriginal()">
-                    Abrir dashboard analítico
-                </button>
-
-                <button class="perfil-secundario" onclick="mostrarSelecaoPerfis()">
-                    Trocar perfil
-                </button>
-
-            </div>
-        </div>
-    `;
-
-    elemento("formFreteDemo").addEventListener(
-        "submit",
-        cadastrarFreteDemo
-    );
-
-    atualizarListaEmpresa();
-}
-
-/* =========================
-   CADASTRAR FRETE
-========================= */
-
-function cadastrarFreteDemo(evento) {
-    evento.preventDefault();
-
-    if (perfilAtual !== "empresa") {
-        return;
-    }
-
-    const novoFrete = {
-        codigo: "FRT" + Date.now().toString().slice(-8),
-
-        origem: elemento("demoOrigem").value.trim(),
-        destino: elemento("demoDestino").value.trim(),
-        carga: elemento("demoCarga").value.trim(),
-        peso: Number(elemento("demoPeso").value),
-        motorista: elemento("demoMotorista").value.trim(),
-        placa: elemento("demoPlaca").value.trim().toUpperCase(),
-        valor: Number(elemento("demoValor").value),
-
-        status: "Disponível"
-    };
-
-    if (
-        !novoFrete.origem ||
-        !novoFrete.destino ||
-        !novoFrete.carga ||
-        !novoFrete.motorista ||
-        !novoFrete.placa ||
-        novoFrete.peso <= 0 ||
-        novoFrete.valor < 0
-    ) {
-        alert("Verifique os dados do frete.");
-        return;
-    }
-
-    fretesDemo.push(novoFrete);
-
-    salvarFretes();
-    atualizarListaEmpresa();
-
-    elemento("formFreteDemo").reset();
-
-    alert("Frete demonstrativo cadastrado com sucesso!");
-}
-
-/* =========================
-   LISTA DA EMPRESA
-========================= */
-
-function atualizarListaEmpresa() {
-    const lista = elemento("listaFretesEmpresa");
-
-    if (!lista) return;
-
-    lista.innerHTML = "";
-
-    if (!fretesDemo.length) {
-        lista.textContent = "Nenhum frete cadastrado.";
-        return;
-    }
-
-    fretesDemo.forEach(frete => {
-        const card = document.createElement("div");
-        card.className = "perfil-frete";
-
-        const titulo = document.createElement("strong");
-
-        titulo.textContent =
-            `${frete.codigo} | ${frete.origem} → ${frete.destino}`;
-
-        const detalhes = document.createElement("p");
-
-        detalhes.textContent =
-            `Carga: ${frete.carga} | ${frete.peso} toneladas | ${frete.motorista} | ${frete.placa}`;
-
-        const valor = document.createElement("p");
-        valor.textContent = `Valor: ${formatarMoeda(frete.valor)}`;
-
-        const status = document.createElement("p");
-        status.textContent = `Status: ${frete.status}`;
-
-        const botao = document.createElement("button");
-
-        botao.className = "perfil-botao";
-        botao.textContent = "Gerar QR Code";
-
-        botao.addEventListener("click", () => {
-            gerarQRCodeFrete(frete.codigo);
-        });
-
-        card.append(titulo, detalhes, valor, status, botao);
-
-        lista.appendChild(card);
-    });
-}
-
-/* =========================
-   GERAÇÃO DE QR CODE
-========================= */
-
-async function gerarQRCodeFrete(codigo) {
-    if (perfilAtual !== "empresa") {
-        return;
-    }
-
-    const frete = fretesDemo.find(
-        item => item.codigo === codigo
-    );
-
-    if (!frete) return;
-
-    try {
-        await carregarBibliotecaQR();
-
-        const area = elemento("areaPerfis");
-
-        let painelQR = elemento("painelQRCode");
-
-        if (!painelQR) {
-            painelQR = document.createElement("div");
-
-            painelQR.id = "painelQRCode";
-            painelQR.className = "perfil-frete";
-
-            area.querySelector(".perfil-painel").appendChild(painelQR);
-        }
-
-        painelQR.innerHTML = `
-            <h3>QR Code do frete</h3>
-            <div id="qrImagem" style="margin:15px 0;"></div>
-            <p>Use o código ou QR Code para consultar este frete.</p>
-            <strong></strong>
-        `;
-
-        painelQR.querySelector("strong").textContent = frete.codigo;
-
-        const imagem = elemento("qrImagem");
-
-        new QRCode(imagem, {
-            text: frete.codigo,
-            width: 180,
-            height: 180
-        });
-
-        painelQR.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-        });
-
-    } catch (erro) {
-        console.error(erro);
-        alert("Não foi possível carregar o gerador de QR Code.");
-    }
-}
-
-/* =========================
-   PAINEL CAMINHONEIRO
-========================= */
-
-function mostrarPainelCaminhoneiro() {
-    const area = elemento("areaPerfis");
-
-    if (!area) return;
-
-    area.style.display = "flex";
-
-    area.innerHTML = `
-        <div class="perfil-painel">
-
-            <h2>Painel do Caminhoneiro</h2>
-
-            <p>Consulte os fretes disponíveis no ambiente demonstrativo.</p>
-
-            <label>Código do frete</label>
-
-            <input
-                id="codigoConsulta"
-                placeholder="Ex.: FRT001"
-            >
-
-            <button class="perfil-botao" onclick="consultarFreteDemo()">
-                Consultar frete
-            </button>
-
-            <div id="resultadoConsulta" style="margin-top:20px;"></div>
-
-            <hr style="margin:25px 0;border:0;border-top:1px solid #e2e8f0;">
-
-            <h2>Fretes demonstrativos</h2>
-
-            <div id="listaFretesCaminhoneiro"></div>
-
-            <div class="perfil-acoes">
-
-                <button class="perfil-secundario" onclick="mostrarSelecaoPerfis()">
-                    Trocar perfil
-                </button>
-
-            </div>
-        </div>
-    `;
-
-    atualizarFretesCaminhoneiro();
-}
-
-/* =========================
-   CONSULTAR FRETE
-========================= */
-
-function consultarFreteDemo() {
-    if (perfilAtual !== "caminhoneiro") {
-        return;
-    }
-
-    const campo = elemento("codigoConsulta");
-
-    const codigo = campo.value.trim().toUpperCase();
-
-    const frete = fretesDemo.find(
-        item => item.codigo.toUpperCase() === codigo
-    );
-
-    const resultado = elemento("resultadoConsulta");
-
-    if (!frete) {
-        resultado.textContent =
-            "Nenhum frete encontrado com esse código.";
-
-        return;
-    }
-
-    resultado.innerHTML = "";
-
-    const titulo = document.createElement("h3");
-
-    titulo.textContent = `Frete ${frete.codigo}`;
-
-    const informacoes = document.createElement("div");
-
-    informacoes.className = "perfil-frete";
-
-    [
-        `Origem: ${frete.origem}`,
-        `Destino: ${frete.destino}`,
-        `Carga: ${frete.carga}`,
-        `Peso: ${frete.peso} toneladas`,
-        `Motorista: ${frete.motorista}`,
-        `Placa: ${frete.placa}`,
-        `Valor: ${formatarMoeda(frete.valor)}`,
-        `Status: ${frete.status}`
-    ].forEach(texto => {
-        const p = document.createElement("p");
-
-        p.textContent = texto;
-
-        informacoes.appendChild(p);
-    });
-
-    resultado.append(titulo, informacoes);
-}
-
-/* =========================
-   LISTA DO CAMINHONEIRO
-========================= */
-
-function atualizarFretesCaminhoneiro() {
-    const lista = elemento("listaFretesCaminhoneiro");
-
-    if (!lista) return;
-
-    lista.innerHTML = "";
-
-    if (!fretesDemo.length) {
-        lista.textContent = "Nenhum frete disponível.";
-        return;
-    }
-
-    fretesDemo.forEach(frete => {
-        const card = document.createElement("div");
-
-        card.className = "perfil-frete";
-
-        const titulo = document.createElement("strong");
-
-        titulo.textContent =
-            `${frete.codigo} | ${frete.origem} → ${frete.destino}`;
-
-        const carga = document.createElement("p");
-
-        carga.textContent =
-            `Carga: ${frete.carga} | ${frete.peso} toneladas`;
-
-        const status = document.createElement("p");
-
-        status.textContent = `Status: ${frete.status}`;
-
-        const botao = document.createElement("button");
-
-        botao.className = "perfil-botao";
-        botao.textContent = "Consultar";
-
-        botao.addEventListener("click", () => {
-            elemento("codigoConsulta").value = frete.codigo;
-            consultarFreteDemo();
-        });
-
-        card.append(titulo, carga, status, botao);
-
-        lista.appendChild(card);
-    });
-}
-
-/* =========================
-   ACESSO AO DASHBOARD
-========================= */
-
-function abrirDashboardOriginal() {
-    // Bloqueia o acesso caso o perfil não seja Empresa.
-    if (perfilAtual !== "empresa") {
-        alert("O dashboard analítico é exclusivo do perfil Empresa.");
-        return;
-    }
-
-    const area = elemento("areaPerfis");
-
-    if (area) {
-        area.style.display = "none";
-    }
-
-    let botao = elemento("botaoTrocarPerfil");
-
-    if (!botao) {
-        botao = document.createElement("button");
-
-        botao.id = "botaoTrocarPerfil";
-        botao.textContent = "Trocar perfil";
-
-        botao.addEventListener("click", () => {
-            mostrarSelecaoPerfis();
-        });
-
-        document.body.appendChild(botao);
-    }
-
-    botao.style.display = "block";
-
-    const dashboard = elemento("dashboard");
-
-    if (dashboard) {
-        dashboard.scrollIntoView({
-            behavior: "smooth"
-        });
-    } else {
-        window.scrollTo({
-            top: 0,
-            behavior: "smooth"
-        });
-    }
-}
-
-/* =========================
+/* =========================================================
    INICIALIZAÇÃO
-========================= */
+========================================================= */
 
 function iniciarAplicacao() {
-    carregarDadosPython();
+    adicionarEstilosPerfis();
 
-    const botaoLocalizacao = elemento("btnLocalizacao");
+    configurarCadastroFrete();
+    configurarSimulacao();
 
-    if (botaoLocalizacao) {
-        botaoLocalizacao.addEventListener(
-            "click",
-            obterLocalizacao
-        );
-    }
+    mostrarSelecaoPerfil();
 
-    const botaoCalcular = elemento("btnCalcular");
-
-    if (botaoCalcular) {
-        botaoCalcular.addEventListener(
-            "click",
-            calcularSimulacao
-        );
-    }
-
-    const tipoRota =
-        elemento("tipoRota") ||
-        elemento("tipoPercurso");
-
-    if (tipoRota) {
-        tipoRota.addEventListener(
-            "change",
-            controlarCampoRetorno
-        );
-
-        controlarCampoRetorno();
-    }
-
-    criarInterfacePerfis();
+    console.log("Freight Analytics iniciado.");
 }
 
-/* =========================
-   EXECUÇÃO
-========================= */
-
-if (document.readyState === "loading") {
-    document.addEventListener(
-        "DOMContentLoaded",
-        iniciarAplicacao
-    );
-} else {
-    iniciarAplicacao();
-}
+document.addEventListener("DOMContentLoaded", iniciarAplicacao);
