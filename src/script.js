@@ -17,6 +17,90 @@ let graficoCustos = null;
 let graficoLSTM = null;
 
 // ==========================================
+// CRIAR ÁREA DE DIESEL E INTELIGÊNCIA
+// ==========================================
+
+function adicionarAreaInteligencia() {
+    const dashboard = document.getElementById("dashboard");
+    const simulacao = document.getElementById("simulacao");
+
+    if (!dashboard || !simulacao) return;
+
+    const cards = dashboard.querySelector(".cards");
+
+    if (cards && !document.getElementById("precoDieselMedio")) {
+        const cardDiesel = document.createElement("article");
+        cardDiesel.className = "card";
+        cardDiesel.innerHTML = `
+            <span>Diesel S10 médio - Paraná</span>
+            <h3 id="precoDieselMedio">Carregando...</h3>
+            <small id="dataDiesel">Referência de preço informada no arquivo de dados</small>
+        `;
+        cards.appendChild(cardDiesel);
+    }
+
+    const menu = document.querySelector(".sidebar nav");
+
+    if (menu && !menu.querySelector('a[href="#areaInteligencia"]')) {
+        const link = document.createElement("a");
+        link.href = "#areaInteligencia";
+        link.textContent = "Inteligência Artificial";
+        menu.appendChild(link);
+    }
+
+    if (!document.getElementById("areaInteligencia")) {
+        const secao = document.createElement("section");
+        secao.id = "areaInteligencia";
+
+        secao.innerHTML = `
+            <div class="section-heading">
+                <h2>Inteligência Artificial</h2>
+                <p>Resultados do modelo LSTM aplicado aos custos de frete</p>
+            </div>
+
+            <div class="cards">
+                <article class="card">
+                    <span>Erro absoluto médio (MAE)</span>
+                    <h3 id="lstmMAE">Aguardando dados...</h3>
+                    <small>Erro médio das previsões</small>
+                </article>
+
+                <article class="card">
+                    <span>Raiz do erro quadrático (RMSE)</span>
+                    <h3 id="lstmRMSE">Aguardando dados...</h3>
+                    <small>Penaliza erros maiores</small>
+                </article>
+
+                <article class="card">
+                    <span>R² do modelo</span>
+                    <h3 id="lstmR2">Aguardando dados...</h3>
+                    <small>Coeficiente de determinação</small>
+                </article>
+
+                <article class="card">
+                    <span>Total de previsões avaliadas</span>
+                    <h3 id="totalPrevisoes">Aguardando dados...</h3>
+                    <small>Registros do conjunto de teste</small>
+                </article>
+            </div>
+
+            <div class="panel">
+                <h3>Valores reais x valores previstos</h3>
+                <div class="chart-placeholder">
+                    <canvas id="graficoLSTM"></canvas>
+                </div>
+                <small>
+                    Gráfico de amostra das previsões do conjunto de teste.
+                    Não representa uma previsão garantida de fretes futuros.
+                </small>
+            </div>
+        `;
+
+        simulacao.parentNode.insertBefore(secao, simulacao);
+    }
+}
+
+// ==========================================
 // 1. CARREGAR DADOS DO PYTHON
 // ==========================================
 
@@ -32,7 +116,6 @@ async function carregarDadosPython() {
 
         const dados = await resposta.json();
 
-        // Indicadores principais
         document.getElementById("totalFretes").textContent =
             numero.format(dados.totalFretes ?? 0);
 
@@ -42,37 +125,42 @@ async function carregarDadosPython() {
         document.getElementById("custoMedio").textContent =
             moeda.format(dados.custoMedio ?? 0);
 
-        // Gráfico mensal
         criarGraficoCustos(dados.custosMensais);
 
-        // Preço médio do diesel
         if (dados.diesel) {
-            document.getElementById("precoDieselMedio").textContent =
-                moeda.format(dados.diesel.precoMedio);
+            const precoDiesel = document.getElementById("precoDieselMedio");
+            const dataDiesel = document.getElementById("dataDiesel");
+            const campoDiesel = document.getElementById("diesel");
 
-            document.getElementById("dataDiesel").textContent =
-                `${dados.diesel.estado} | ${dados.diesel.periodo} | ${dados.diesel.fonte}`;
+            if (precoDiesel) {
+                precoDiesel.textContent = moeda.format(dados.diesel.precoMedio);
+            }
 
-            // Preencher o simulador automaticamente
-            document.getElementById("diesel").value =
-                dados.diesel.precoMedio;
+            if (dataDiesel) {
+                dataDiesel.textContent =
+                    `${dados.diesel.estado} | ${dados.diesel.periodo} | ${dados.diesel.fonte}`;
+            }
+
+            if (campoDiesel && !campoDiesel.value) {
+                campoDiesel.value = dados.diesel.precoMedio;
+            }
         }
 
-        // Métricas e previsões da LSTM
         if (dados.lstm) {
             const modelo = dados.lstm;
 
-            document.getElementById("lstmMAE").textContent =
-                moeda.format(modelo.mae);
+            const mae = document.getElementById("lstmMAE");
+            const rmse = document.getElementById("lstmRMSE");
+            const r2 = document.getElementById("lstmR2");
+            const total = document.getElementById("totalPrevisoes");
 
-            document.getElementById("lstmRMSE").textContent =
-                moeda.format(modelo.rmse);
+            if (mae) mae.textContent = moeda.format(modelo.mae);
+            if (rmse) rmse.textContent = moeda.format(modelo.rmse);
+            if (r2) r2.textContent = Number(modelo.r2).toFixed(4);
 
-            document.getElementById("lstmR2").textContent =
-                Number(modelo.r2).toFixed(4);
-
-            document.getElementById("totalPrevisoes").textContent =
-                numero.format(modelo.quantidadePrevisoes);
+            if (total) {
+                total.textContent = numero.format(modelo.quantidadePrevisoes);
+            }
 
             criarGraficoLSTM(modelo.previsoes);
         }
@@ -85,7 +173,12 @@ async function carregarDadosPython() {
         document.getElementById("totalFretes").textContent = "Indisponível";
         document.getElementById("custoTotal").textContent = "Indisponível";
         document.getElementById("custoMedio").textContent = "Indisponível";
-        document.getElementById("precoDieselMedio").textContent = "Indisponível";
+
+        const precoDiesel = document.getElementById("precoDieselMedio");
+
+        if (precoDiesel) {
+            precoDiesel.textContent = "Indisponível";
+        }
     }
 }
 
@@ -101,9 +194,11 @@ function criarGraficoCustos(dadosMensais) {
         return;
     }
 
-    if (!dadosMensais ||
+    if (
+        !dadosMensais ||
         !Array.isArray(dadosMensais.labels) ||
-        !Array.isArray(dadosMensais.valores)) {
+        !Array.isArray(dadosMensais.valores)
+    ) {
         console.error("Dados mensais não encontrados no JSON.");
         return;
     }
@@ -292,6 +387,7 @@ async function buscarEndereco(latitude, longitude) {
     }
 
     const dados = await resposta.json();
+
     return dados.display_name;
 }
 
@@ -458,27 +554,34 @@ async function calcularSimulacao() {
 
 document.addEventListener("DOMContentLoaded", function() {
 
-    // Carregar dados do arquivo JSON
+    adicionarAreaInteligencia();
+
     carregarDadosPython();
 
-    // Botão de localização
-    document.getElementById("usarLocalizacao")
-        .addEventListener("click", obterLocalizacao);
+    const botaoLocalizacao = document.getElementById("usarLocalizacao");
 
-    // Botão de simulação
-    document.getElementById("calcularSimulacao")
-        .addEventListener("click", calcularSimulacao);
+    if (botaoLocalizacao) {
+        botaoLocalizacao.addEventListener("click", obterLocalizacao);
+    }
 
-    // Campo de retorno personalizado
-    document.getElementById("tipoPercurso")
-        .addEventListener("change", function() {
-            const campoRetorno =
-                document.getElementById("campoRetorno");
+    const botaoSimulacao = document.getElementById("calcularSimulacao");
 
-            campoRetorno.style.display =
-                this.value === "personalizado" ? "block" : "none";
+    if (botaoSimulacao) {
+        botaoSimulacao.addEventListener("click", calcularSimulacao);
+    }
+
+    const tipoPercurso = document.getElementById("tipoPercurso");
+
+    if (tipoPercurso) {
+        tipoPercurso.addEventListener("change", function() {
+            const campoRetorno = document.getElementById("campoRetorno");
+
+            if (campoRetorno) {
+                campoRetorno.style.display =
+                    this.value === "personalizado" ? "block" : "none";
+            }
         });
+    }
 
-    // Tentar obter localização
     obterLocalizacao();
 });
