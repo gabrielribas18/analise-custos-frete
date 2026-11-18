@@ -12,7 +12,9 @@ let graficoCustos = null;
 let graficoLSTM = null;
 let perfilAtual = null;
 
-let fretesDemo = [
+const CHAVE_FRETES = "freightAnalytics_fretes";
+
+const fretesIniciais = [
     {
         codigo: "FRT001",
         origem: "Guarapuava - PR",
@@ -37,6 +39,8 @@ let fretesDemo = [
     }
 ];
 
+let fretesDemo = carregarFretesSalvos();
+
 /* =========================
    FUNÇÕES AUXILIARES
 ========================= */
@@ -54,7 +58,40 @@ function formatarMoeda(valor) {
 
 function atualizarTexto(id, valor) {
     const campo = elemento(id);
-    if (campo) campo.textContent = valor;
+
+    if (campo) {
+        campo.textContent = valor;
+    }
+}
+
+function carregarFretesSalvos() {
+    try {
+        const dados = localStorage.getItem(CHAVE_FRETES);
+
+        if (dados) {
+            const fretes = JSON.parse(dados);
+
+            if (Array.isArray(fretes)) {
+                return fretes;
+            }
+        }
+    } catch (erro) {
+        console.error("Erro ao recuperar fretes:", erro);
+    }
+
+    return [...fretesIniciais];
+}
+
+function salvarFretes() {
+    try {
+        localStorage.setItem(
+            CHAVE_FRETES,
+            JSON.stringify(fretesDemo)
+        );
+    } catch (erro) {
+        console.error("Erro ao salvar fretes:", erro);
+        alert("Não foi possível salvar os fretes neste navegador.");
+    }
 }
 
 /* =========================
@@ -75,43 +112,68 @@ async function carregarDadosPython() {
         criarGraficoCustos(dados);
         atualizarInteligenciaArtificial(dados);
 
+        console.log("Dados do Python carregados com sucesso.");
+
     } catch (erro) {
         console.error("Erro ao carregar os dados:", erro);
     }
 }
 
+/* =========================
+   INDICADORES PRINCIPAIS
+========================= */
+
 function atualizarIndicadores(dados) {
+    const diesel = dados.diesel || {};
+
     const indicadores = {
         totalFretes: dados.totalFretes,
         totalRegistros: dados.totalRegistros,
         custoTotal: dados.custoTotal,
         custoMedio: dados.custoMedio,
-        diesel: dados.dieselS10PR
+        diesel: diesel.precoMedio
     };
 
-    // Atualiza somente os elementos que existirem no HTML.
     const campos = {
         totalFretes: ["totalFretes", "kpiFretes"],
         totalRegistros: ["totalRegistros", "kpiRegistros"],
         custoTotal: ["custoTotal", "kpiCustoTotal"],
         custoMedio: ["custoMedio", "kpiCustoMedio"],
-        diesel: ["dieselS10", "kpiDiesel"]
+        diesel: ["dieselS10", "kpiDiesel", "precoDieselMedio"]
     };
 
     Object.entries(campos).forEach(([chave, ids]) => {
         ids.forEach(id => {
             const campo = elemento(id);
-            if (!campo || indicadores[chave] === undefined) return;
-
             const valor = indicadores[chave];
 
+            if (!campo || valor === undefined || valor === null) {
+                return;
+            }
+
             campo.textContent =
-                chave === "custoTotal" ||
-                chave === "custoMedio" ||
-                chave === "diesel"
+                ["custoTotal", "custoMedio", "diesel"].includes(chave)
                     ? formatarMoeda(valor)
                     : Number(valor).toLocaleString("pt-BR");
         });
+    });
+
+    atualizarTexto(
+        "dataDiesel",
+        `Fonte: ${diesel.fonte || "ANP"} | ${diesel.periodo || "--"}`
+    );
+
+    // Atualiza o preço do diesel nos campos do simulador.
+    ["precoDiesel", "diesel"].forEach(id => {
+        const campo = elemento(id);
+
+        if (
+            campo &&
+            diesel.precoMedio !== undefined &&
+            campo.tagName === "INPUT"
+        ) {
+            campo.value = Number(diesel.precoMedio).toFixed(2);
+        }
     });
 }
 
@@ -122,21 +184,18 @@ function atualizarIndicadores(dados) {
 function criarGraficoCustos(dados) {
     const canvas = elemento("graficoCustosChart");
 
-    if (!canvas || typeof Chart === "undefined") return;
+    if (!canvas || typeof Chart === "undefined") {
+        return;
+    }
 
-    const registros = dados.custosMensais || dados.custosPorMes || dados.mensal || [];
+    const registros = dados.custosMensais || {};
 
-    let labels = [];
-    let valores = [];
+    const labels = registros.labels || [];
+    const valores = registros.valores || [];
 
-    if (Array.isArray(registros)) {
-        labels = registros.map(item =>
-            item.mes || item.periodo || item.label || ""
-        );
-
-        valores = registros.map(item =>
-            Number(item.custo || item.valor || item.total || 0)
-        );
+    if (!labels.length || !valores.length) {
+        console.warn("Dados mensais não encontrados.");
+        return;
     }
 
     if (graficoCustos) {
@@ -145,28 +204,46 @@ function criarGraficoCustos(dados) {
 
     graficoCustos = new Chart(canvas, {
         type: "line",
+
         data: {
-            labels,
+            labels: labels,
+
             datasets: [{
-                label: "Custo de fretes",
+                label: "Custo dos fretes",
                 data: valores,
                 borderColor: "#2563eb",
                 backgroundColor: "rgba(37, 99, 235, 0.12)",
+                borderWidth: 2,
                 fill: true,
-                tension: 0.3
+                tension: 0.3,
+                pointRadius: 3
             }]
         },
+
         options: {
             responsive: true,
             maintainAspectRatio: false,
+
             plugins: {
                 legend: {
                     display: true
+                },
+
+                tooltip: {
+                    callbacks: {
+                        label: contexto =>
+                            formatarMoeda(contexto.raw)
+                    }
                 }
             },
+
             scales: {
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+
+                    ticks: {
+                        callback: valor => formatarMoeda(valor)
+                    }
                 }
             }
         }
@@ -178,35 +255,62 @@ function criarGraficoCustos(dados) {
 ========================= */
 
 function atualizarInteligenciaArtificial(dados) {
-    const ia = dados.lstm || dados.inteligenciaArtificial || dados;
+    const ia = dados.lstm || {};
 
-    atualizarTexto("maeLSTM", formatarMoeda(ia.mae));
-    atualizarTexto("rmseLSTM", formatarMoeda(ia.rmse));
+    atualizarTexto(
+        "maeLSTM",
+        ia.mae !== undefined ? formatarMoeda(ia.mae) : "--"
+    );
+
+    atualizarTexto(
+        "rmseLSTM",
+        ia.rmse !== undefined ? formatarMoeda(ia.rmse) : "--"
+    );
 
     atualizarTexto(
         "r2LSTM",
-        ia.r2 !== undefined ? Number(ia.r2).toFixed(4) : "--"
+        ia.r2 !== undefined
+            ? Number(ia.r2).toFixed(4)
+            : "--"
     );
 
     atualizarTexto(
         "totalPredicoes",
-        Number(ia.totalPredicoes || ia.totalTeste || 0).toLocaleString("pt-BR")
+        Number(ia.quantidadePrevisoes || 0).toLocaleString("pt-BR")
     );
 
     criarGraficoLSTM(dados);
 }
 
+/* =========================
+   GRÁFICO LSTM
+========================= */
+
 function criarGraficoLSTM(dados) {
     const canvas = elemento("graficoLSTM");
 
-    if (!canvas || typeof Chart === "undefined") return;
+    if (!canvas || typeof Chart === "undefined") {
+        return;
+    }
 
-    const ia = dados.lstm || dados.inteligenciaArtificial || dados;
+    const previsoes = dados.lstm?.previsoes || [];
 
-    const real = ia.valoresReais || ia.real || [];
-    const previsto = ia.valoresPrevistos || ia.previsto || [];
+    if (!previsoes.length) {
+        return;
+    }
 
-    if (!real.length || !previsto.length) return;
+    // Limita a amostra para manter o gráfico legível.
+    const quantidade = Math.min(150, previsoes.length);
+    const passo = previsoes.length / quantidade;
+
+    const amostra = Array.from(
+        { length: quantidade },
+        (_, indice) => previsoes[Math.floor(indice * passo)]
+    );
+
+    const labels = amostra.map(item => item.data);
+    const reais = amostra.map(item => Number(item.real));
+    const previstos = amostra.map(item => Number(item.previsto));
 
     if (graficoLSTM) {
         graficoLSTM.destroy();
@@ -214,28 +318,45 @@ function criarGraficoLSTM(dados) {
 
     graficoLSTM = new Chart(canvas, {
         type: "line",
+
         data: {
-            labels: real.map((_, i) => i + 1),
+            labels: labels,
+
             datasets: [
                 {
                     label: "Valores reais",
-                    data: real,
+                    data: reais,
                     borderColor: "#2563eb",
+                    borderWidth: 2,
                     pointRadius: 0,
                     tension: 0.2
                 },
                 {
                     label: "Valores previstos",
-                    data: previsto,
+                    data: previstos,
                     borderColor: "#f59e0b",
+                    borderWidth: 2,
                     pointRadius: 0,
                     tension: 0.2
                 }
             ]
         },
+
         options: {
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
+
+            plugins: {
+                legend: {
+                    display: true
+                }
+            },
+
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
         }
     });
 }
@@ -266,6 +387,10 @@ async function obterLocalizacao() {
                     `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`
                 );
 
+                if (!resposta.ok) {
+                    throw new Error("Erro ao consultar endereço.");
+                }
+
                 const dados = await resposta.json();
 
                 if (campo && dados.display_name) {
@@ -276,15 +401,71 @@ async function obterLocalizacao() {
                 console.error("Erro ao consultar endereço:", erro);
             }
         },
+
         erro => {
             console.error(erro);
             alert("Não foi possível obter sua localização.");
         },
+
         {
             enableHighAccuracy: true,
             timeout: 15000
         }
     );
+}
+
+/* =========================
+   BUSCA DE COORDENADAS
+========================= */
+
+async function buscarCoordenadas(endereco) {
+    const resposta = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endereco)}`
+    );
+
+    if (!resposta.ok) {
+        throw new Error("Erro ao consultar localização.");
+    }
+
+    const dados = await resposta.json();
+
+    if (!dados.length) {
+        throw new Error("Endereço não encontrado: " + endereco);
+    }
+
+    return {
+        lat: Number(dados[0].lat),
+        lon: Number(dados[0].lon)
+    };
+}
+
+/* =========================
+   BUSCA DE ROTAS
+========================= */
+
+async function buscarRota(origem, destino) {
+    const url =
+        `https://router.project-osrm.org/route/v1/driving/` +
+        `${origem.lon},${origem.lat};${destino.lon},${destino.lat}` +
+        "?overview=false";
+
+    const resposta = await fetch(url);
+
+    if (!resposta.ok) {
+        throw new Error("Erro ao consultar a rota.");
+    }
+
+    const dados = await resposta.json();
+
+    if (
+        dados.code !== "Ok" ||
+        !dados.routes ||
+        !dados.routes.length
+    ) {
+        throw new Error("Não foi possível encontrar a rota.");
+    }
+
+    return dados.routes[0];
 }
 
 /* =========================
@@ -312,8 +493,13 @@ async function calcularSimulacao() {
         return;
     }
 
-    if (!consumo || !precoDiesel) {
-        alert("Informe o consumo do veículo e o preço do diesel.");
+    if (
+        !Number.isFinite(consumo) ||
+        consumo <= 0 ||
+        !Number.isFinite(precoDiesel) ||
+        precoDiesel <= 0
+    ) {
+        alert("Informe um consumo e um preço de diesel válidos.");
         return;
     }
 
@@ -325,37 +511,75 @@ async function calcularSimulacao() {
         const coordenadasOrigem = await buscarCoordenadas(origem);
         const coordenadasDestino = await buscarCoordenadas(destino);
 
-        const rota = await buscarRota(
+        const rotaIda = await buscarRota(
             coordenadasOrigem,
             coordenadasDestino
         );
 
-        const distancia = rota.distance / 1000;
-        const duracao = rota.duration / 3600;
+        const distanciaIda = rotaIda.distance / 1000;
+        const tempoIda = rotaIda.duration / 3600;
 
-        const litros = distancia / consumo;
-        const custoCombustivel = litros * precoDiesel;
+        const tipoRota =
+            elemento("tipoRota")?.value ||
+            elemento("tipoPercurso")?.value ||
+            "somente_ida";
 
-        const retorno = elemento("tipoRota")?.value || "somente_ida";
+        let distanciaTotal = distanciaIda;
+        let tempoTotal = tempoIda;
+        let distanciaRetorno = 0;
 
-        let distanciaTotal = distancia;
-
-        if (retorno === "ida_volta") {
-            distanciaTotal *= 2;
+        if (tipoRota === "ida_volta") {
+            distanciaRetorno = distanciaIda;
         }
+
+        if (tipoRota === "personalizado") {
+            const destinoRetorno = elemento("destinoRetorno")?.value.trim();
+
+            if (!destinoRetorno) {
+                alert("Informe o destino de retorno.");
+                return;
+            }
+
+            const coordenadasRetorno =
+                await buscarCoordenadas(destinoRetorno);
+
+            const rotaRetorno = await buscarRota(
+                coordenadasDestino,
+                coordenadasRetorno
+            );
+
+            distanciaRetorno = rotaRetorno.distance / 1000;
+            tempoTotal += rotaRetorno.duration / 3600;
+        }
+
+        distanciaTotal += distanciaRetorno;
 
         const litrosTotal = distanciaTotal / consumo;
         const custoTotal = litrosTotal * precoDiesel;
 
         if (resultado) {
-            resultado.innerHTML = `
-                <h3>Resultado da simulação</h3>
-                <p><strong>Distância de ida:</strong> ${distancia.toFixed(1)} km</p>
-                <p><strong>Distância considerada:</strong> ${distanciaTotal.toFixed(1)} km</p>
-                <p><strong>Tempo estimado de ida:</strong> ${duracao.toFixed(1)} horas</p>
-                <p><strong>Combustível estimado:</strong> ${litrosTotal.toFixed(1)} litros</p>
-                <p><strong>Custo estimado:</strong> ${formatarMoeda(custoTotal)}</p>
-            `;
+            resultado.innerHTML = "";
+
+            const titulo = document.createElement("h3");
+            titulo.textContent = "Resultado da simulação";
+
+            const informacoes = [
+                `Distância de ida: ${distanciaIda.toFixed(1)} km`,
+                `Distância de retorno: ${distanciaRetorno.toFixed(1)} km`,
+                `Distância total: ${distanciaTotal.toFixed(1)} km`,
+                `Tempo estimado: ${tempoTotal.toFixed(1)} horas`,
+                `Combustível estimado: ${litrosTotal.toFixed(1)} litros`,
+                `Preço do diesel: ${formatarMoeda(precoDiesel)}`,
+                `Custo estimado: ${formatarMoeda(custoTotal)}`
+            ];
+
+            resultado.appendChild(titulo);
+
+            informacoes.forEach(texto => {
+                const paragrafo = document.createElement("p");
+                paragrafo.textContent = texto;
+                resultado.appendChild(paragrafo);
+            });
         }
 
     } catch (erro) {
@@ -363,42 +587,28 @@ async function calcularSimulacao() {
 
         if (resultado) {
             resultado.textContent =
-                "Não foi possível calcular a rota. Verifique os endereços informados.";
+                "Não foi possível calcular a rota. Verifique os endereços e tente novamente.";
         }
     }
 }
 
-async function buscarCoordenadas(endereco) {
-    const resposta = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endereco)}`
-    );
+/* =========================
+   CAMPO DE RETORNO
+========================= */
 
-    const dados = await resposta.json();
+function controlarCampoRetorno() {
+    const tipo =
+        elemento("tipoRota") ||
+        elemento("tipoPercurso");
 
-    if (!dados.length) {
-        throw new Error("Endereço não encontrado: " + endereco);
+    const campo = elemento("campoRetorno");
+
+    if (!tipo || !campo) {
+        return;
     }
 
-    return {
-        lat: Number(dados[0].lat),
-        lon: Number(dados[0].lon)
-    };
-}
-
-async function buscarRota(origem, destino) {
-    const url =
-        `https://router.project-osrm.org/route/v1/driving/` +
-        `${origem.lon},${origem.lat};${destino.lon},${destino.lat}` +
-        "?overview=false";
-
-    const resposta = await fetch(url);
-    const dados = await resposta.json();
-
-    if (!dados.routes || !dados.routes.length) {
-        throw new Error("Não foi possível encontrar a rota.");
-    }
-
-    return dados.routes[0];
+    campo.style.display =
+        tipo.value === "personalizado" ? "block" : "none";
 }
 
 /* =====================================================
@@ -406,23 +616,35 @@ async function buscarRota(origem, destino) {
 ===================================================== */
 
 /* =========================
-   CARREGAR BIBLIOTECA QR
+   BIBLIOTECA QR CODE
 ========================= */
 
 function carregarBibliotecaQR() {
-    if (window.QRCode) return Promise.resolve();
+    if (window.QRCode) {
+        return Promise.resolve();
+    }
 
-    return new Promise((resolve, reject) => {
+    if (window.promessaQRCode) {
+        return window.promessaQRCode;
+    }
+
+    window.promessaQRCode = new Promise((resolve, reject) => {
         const script = document.createElement("script");
 
         script.src =
             "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
 
         script.onload = resolve;
-        script.onerror = reject;
+
+        script.onerror = () => {
+            window.promessaQRCode = null;
+            reject(new Error("Não foi possível carregar o QR Code."));
+        };
 
         document.head.appendChild(script);
     });
+
+    return window.promessaQRCode;
 }
 
 /* =========================
@@ -430,7 +652,9 @@ function carregarBibliotecaQR() {
 ========================= */
 
 function criarInterfacePerfis() {
-    if (elemento("areaPerfis")) return;
+    if (elemento("areaPerfis")) {
+        return;
+    }
 
     const estilos = document.createElement("style");
 
@@ -512,6 +736,10 @@ function criarInterfacePerfis() {
             font-size: 14px;
         }
 
+        .perfil-botao:hover {
+            background: #1d4ed8;
+        }
+
         .perfil-painel {
             background: white;
             padding: 25px;
@@ -520,6 +748,8 @@ function criarInterfacePerfis() {
             max-width: 900px;
             margin: auto;
             box-shadow: 0 5px 25px rgba(0,0,0,.06);
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .perfil-painel h2 {
@@ -576,7 +806,7 @@ function criarInterfacePerfis() {
             position: fixed;
             bottom: 20px;
             right: 20px;
-            z-index: 9998;
+            z-index: 99998;
             background: #172033;
             color: white;
             border: 0;
@@ -602,31 +832,9 @@ function criarInterfacePerfis() {
     const area = document.createElement("div");
     area.id = "areaPerfis";
 
-    area.innerHTML = `
-        <div class="perfil-container">
-            <div class="perfil-titulo">
-                <h1>Freight Analytics | Agrária</h1>
-                <p>Selecione um perfil para acessar o ambiente demonstrativo.</p>
-                <p><strong>Ambiente de demonstração</strong></p>
-            </div>
-
-            <div class="perfil-opcoes">
-                <div class="perfil-card" onclick="abrirPerfil('empresa')">
-                    <h2>Empresa</h2>
-                    <p>Cadastre fretes demonstrativos, acompanhe registros e gere QR Codes.</p>
-                    <button class="perfil-botao">Acessar como empresa</button>
-                </div>
-
-                <div class="perfil-card" onclick="abrirPerfil('caminhoneiro')">
-                    <h2>Caminhoneiro</h2>
-                    <p>Consulte fretes disponíveis e visualize informações de transporte.</p>
-                    <button class="perfil-botao">Acessar como caminhoneiro</button>
-                </div>
-            </div>
-        </div>
-    `;
-
     document.body.appendChild(area);
+
+    mostrarSelecaoPerfis();
 }
 
 /* =========================
@@ -638,25 +846,39 @@ function mostrarSelecaoPerfis() {
 
     if (!area) return;
 
+    perfilAtual = null;
+
+    area.style.display = "flex";
+
+    const botao = elemento("botaoTrocarPerfil");
+
+    if (botao) {
+        botao.remove();
+    }
+
     area.innerHTML = `
         <div class="perfil-container">
+
             <div class="perfil-titulo">
                 <h1>Freight Analytics | Agrária</h1>
-                <p>Selecione seu perfil demonstrativo.</p>
+                <p>Selecione um perfil para acessar o ambiente demonstrativo.</p>
+                <p><strong>Ambiente de demonstração</strong></p>
             </div>
 
             <div class="perfil-opcoes">
+
                 <div class="perfil-card" onclick="abrirPerfil('empresa')">
                     <h2>Empresa</h2>
-                    <p>Gerencie fretes e gere QR Codes.</p>
-                    <button class="perfil-botao">Acessar</button>
+                    <p>Cadastre fretes, acompanhe registros e acesse a análise de custos.</p>
+                    <button class="perfil-botao">Acessar como empresa</button>
                 </div>
 
                 <div class="perfil-card" onclick="abrirPerfil('caminhoneiro')">
                     <h2>Caminhoneiro</h2>
-                    <p>Consulte fretes e informações de transporte.</p>
-                    <button class="perfil-botao">Acessar</button>
+                    <p>Consulte fretes disponíveis e visualize informações de transporte.</p>
+                    <button class="perfil-botao">Acessar como caminhoneiro</button>
                 </div>
+
             </div>
         </div>
     `;
@@ -667,7 +889,10 @@ function abrirPerfil(perfil) {
 
     if (perfil === "empresa") {
         mostrarPainelEmpresa();
-    } else {
+        return;
+    }
+
+    if (perfil === "caminhoneiro") {
         mostrarPainelCaminhoneiro();
     }
 }
@@ -679,12 +904,18 @@ function abrirPerfil(perfil) {
 function mostrarPainelEmpresa() {
     const area = elemento("areaPerfis");
 
+    if (!area) return;
+
+    area.style.display = "flex";
+
     area.innerHTML = `
         <div class="perfil-painel">
+
             <h2>Painel da Empresa</h2>
-            <p>Cadastro de fretes demonstrativos.</p>
+            <p>Cadastro e gerenciamento de fretes demonstrativos.</p>
 
             <form id="formFreteDemo">
+
                 <label>Origem</label>
                 <input id="demoOrigem" required placeholder="Ex.: Guarapuava - PR">
 
@@ -709,53 +940,88 @@ function mostrarPainelEmpresa() {
                 <button class="perfil-botao" type="submit">
                     Cadastrar frete
                 </button>
+
             </form>
 
             <hr style="margin:25px 0;border:0;border-top:1px solid #e2e8f0;">
 
             <h2>Fretes cadastrados</h2>
+
             <div id="listaFretesEmpresa"></div>
 
             <div class="perfil-acoes">
-                <button class="perfil-secundario" onclick="abrirDashboardOriginal()">
+
+                <button class="perfil-botao" onclick="abrirDashboardOriginal()">
                     Abrir dashboard analítico
                 </button>
 
                 <button class="perfil-secundario" onclick="mostrarSelecaoPerfis()">
                     Trocar perfil
                 </button>
+
             </div>
         </div>
     `;
 
-    elemento("formFreteDemo").addEventListener("submit", cadastrarFreteDemo);
+    elemento("formFreteDemo").addEventListener(
+        "submit",
+        cadastrarFreteDemo
+    );
 
     atualizarListaEmpresa();
 }
 
+/* =========================
+   CADASTRAR FRETE
+========================= */
+
 function cadastrarFreteDemo(evento) {
     evento.preventDefault();
 
+    if (perfilAtual !== "empresa") {
+        return;
+    }
+
     const novoFrete = {
-        codigo: "FRT" + String(Date.now()).slice(-6),
-        origem: elemento("demoOrigem").value,
-        destino: elemento("demoDestino").value,
-        carga: elemento("demoCarga").value,
+        codigo: "FRT" + Date.now().toString().slice(-8),
+
+        origem: elemento("demoOrigem").value.trim(),
+        destino: elemento("demoDestino").value.trim(),
+        carga: elemento("demoCarga").value.trim(),
         peso: Number(elemento("demoPeso").value),
-        motorista: elemento("demoMotorista").value,
-        placa: elemento("demoPlaca").value.toUpperCase(),
+        motorista: elemento("demoMotorista").value.trim(),
+        placa: elemento("demoPlaca").value.trim().toUpperCase(),
         valor: Number(elemento("demoValor").value),
+
         status: "Disponível"
     };
 
+    if (
+        !novoFrete.origem ||
+        !novoFrete.destino ||
+        !novoFrete.carga ||
+        !novoFrete.motorista ||
+        !novoFrete.placa ||
+        novoFrete.peso <= 0 ||
+        novoFrete.valor < 0
+    ) {
+        alert("Verifique os dados do frete.");
+        return;
+    }
+
     fretesDemo.push(novoFrete);
 
+    salvarFretes();
     atualizarListaEmpresa();
 
     elemento("formFreteDemo").reset();
 
     alert("Frete demonstrativo cadastrado com sucesso!");
 }
+
+/* =========================
+   LISTA DA EMPRESA
+========================= */
 
 function atualizarListaEmpresa() {
     const lista = elemento("listaFretesEmpresa");
@@ -764,14 +1030,22 @@ function atualizarListaEmpresa() {
 
     lista.innerHTML = "";
 
+    if (!fretesDemo.length) {
+        lista.textContent = "Nenhum frete cadastrado.";
+        return;
+    }
+
     fretesDemo.forEach(frete => {
         const card = document.createElement("div");
         card.className = "perfil-frete";
 
         const titulo = document.createElement("strong");
-        titulo.textContent = `${frete.codigo} | ${frete.origem} → ${frete.destino}`;
+
+        titulo.textContent =
+            `${frete.codigo} | ${frete.origem} → ${frete.destino}`;
 
         const detalhes = document.createElement("p");
+
         detalhes.textContent =
             `Carga: ${frete.carga} | ${frete.peso} toneladas | ${frete.motorista} | ${frete.placa}`;
 
@@ -782,11 +1056,16 @@ function atualizarListaEmpresa() {
         status.textContent = `Status: ${frete.status}`;
 
         const botao = document.createElement("button");
+
         botao.className = "perfil-botao";
         botao.textContent = "Gerar QR Code";
-        botao.addEventListener("click", () => gerarQRCodeFrete(frete.codigo));
+
+        botao.addEventListener("click", () => {
+            gerarQRCodeFrete(frete.codigo);
+        });
 
         card.append(titulo, detalhes, valor, status, botao);
+
         lista.appendChild(card);
     });
 }
@@ -796,7 +1075,13 @@ function atualizarListaEmpresa() {
 ========================= */
 
 async function gerarQRCodeFrete(codigo) {
-    const frete = fretesDemo.find(item => item.codigo === codigo);
+    if (perfilAtual !== "empresa") {
+        return;
+    }
+
+    const frete = fretesDemo.find(
+        item => item.codigo === codigo
+    );
 
     if (!frete) return;
 
@@ -809,25 +1094,34 @@ async function gerarQRCodeFrete(codigo) {
 
         if (!painelQR) {
             painelQR = document.createElement("div");
+
             painelQR.id = "painelQRCode";
             painelQR.className = "perfil-frete";
+
             area.querySelector(".perfil-painel").appendChild(painelQR);
         }
 
         painelQR.innerHTML = `
-            <h3>QR Code do frete ${frete.codigo}</h3>
+            <h3>QR Code do frete</h3>
             <div id="qrImagem" style="margin:15px 0;"></div>
             <p>Use o código ou QR Code para consultar este frete.</p>
-            <strong>${frete.codigo}</strong>
+            <strong></strong>
         `;
 
-        new QRCode(elemento("qrImagem"), {
+        painelQR.querySelector("strong").textContent = frete.codigo;
+
+        const imagem = elemento("qrImagem");
+
+        new QRCode(imagem, {
             text: frete.codigo,
             width: 180,
             height: 180
         });
 
-        painelQR.scrollIntoView({ behavior: "smooth" });
+        painelQR.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
 
     } catch (erro) {
         console.error(erro);
@@ -842,13 +1136,23 @@ async function gerarQRCodeFrete(codigo) {
 function mostrarPainelCaminhoneiro() {
     const area = elemento("areaPerfis");
 
+    if (!area) return;
+
+    area.style.display = "flex";
+
     area.innerHTML = `
         <div class="perfil-painel">
+
             <h2>Painel do Caminhoneiro</h2>
+
             <p>Consulte os fretes disponíveis no ambiente demonstrativo.</p>
 
             <label>Código do frete</label>
-            <input id="codigoConsulta" placeholder="Ex.: FRT001">
+
+            <input
+                id="codigoConsulta"
+                placeholder="Ex.: FRT001"
+            >
 
             <button class="perfil-botao" onclick="consultarFreteDemo()">
                 Consultar frete
@@ -859,16 +1163,15 @@ function mostrarPainelCaminhoneiro() {
             <hr style="margin:25px 0;border:0;border-top:1px solid #e2e8f0;">
 
             <h2>Fretes demonstrativos</h2>
+
             <div id="listaFretesCaminhoneiro"></div>
 
             <div class="perfil-acoes">
-                <button class="perfil-secundario" onclick="abrirDashboardOriginal()">
-                    Abrir dashboard analítico
-                </button>
 
                 <button class="perfil-secundario" onclick="mostrarSelecaoPerfis()">
                     Trocar perfil
                 </button>
+
             </div>
         </div>
     `;
@@ -876,8 +1179,18 @@ function mostrarPainelCaminhoneiro() {
     atualizarFretesCaminhoneiro();
 }
 
+/* =========================
+   CONSULTAR FRETE
+========================= */
+
 function consultarFreteDemo() {
-    const codigo = elemento("codigoConsulta").value.trim().toUpperCase();
+    if (perfilAtual !== "caminhoneiro") {
+        return;
+    }
+
+    const campo = elemento("codigoConsulta");
+
+    const codigo = campo.value.trim().toUpperCase();
 
     const frete = fretesDemo.find(
         item => item.codigo.toUpperCase() === codigo
@@ -886,16 +1199,20 @@ function consultarFreteDemo() {
     const resultado = elemento("resultadoConsulta");
 
     if (!frete) {
-        resultado.textContent = "Nenhum frete encontrado com esse código.";
+        resultado.textContent =
+            "Nenhum frete encontrado com esse código.";
+
         return;
     }
 
     resultado.innerHTML = "";
 
     const titulo = document.createElement("h3");
+
     titulo.textContent = `Frete ${frete.codigo}`;
 
     const informacoes = document.createElement("div");
+
     informacoes.className = "perfil-frete";
 
     [
@@ -909,12 +1226,18 @@ function consultarFreteDemo() {
         `Status: ${frete.status}`
     ].forEach(texto => {
         const p = document.createElement("p");
+
         p.textContent = texto;
+
         informacoes.appendChild(p);
     });
 
     resultado.append(titulo, informacoes);
 }
+
+/* =========================
+   LISTA DO CAMINHONEIRO
+========================= */
 
 function atualizarFretesCaminhoneiro() {
     const lista = elemento("listaFretesCaminhoneiro");
@@ -923,28 +1246,42 @@ function atualizarFretesCaminhoneiro() {
 
     lista.innerHTML = "";
 
+    if (!fretesDemo.length) {
+        lista.textContent = "Nenhum frete disponível.";
+        return;
+    }
+
     fretesDemo.forEach(frete => {
         const card = document.createElement("div");
+
         card.className = "perfil-frete";
 
         const titulo = document.createElement("strong");
-        titulo.textContent = `${frete.codigo} | ${frete.origem} → ${frete.destino}`;
+
+        titulo.textContent =
+            `${frete.codigo} | ${frete.origem} → ${frete.destino}`;
 
         const carga = document.createElement("p");
-        carga.textContent = `Carga: ${frete.carga} | ${frete.peso} toneladas`;
+
+        carga.textContent =
+            `Carga: ${frete.carga} | ${frete.peso} toneladas`;
 
         const status = document.createElement("p");
+
         status.textContent = `Status: ${frete.status}`;
 
         const botao = document.createElement("button");
+
         botao.className = "perfil-botao";
         botao.textContent = "Consultar";
+
         botao.addEventListener("click", () => {
             elemento("codigoConsulta").value = frete.codigo;
             consultarFreteDemo();
         });
 
         card.append(titulo, carga, status, botao);
+
         lista.appendChild(card);
     });
 }
@@ -954,6 +1291,12 @@ function atualizarFretesCaminhoneiro() {
 ========================= */
 
 function abrirDashboardOriginal() {
+    // Bloqueia o acesso caso o perfil não seja Empresa.
+    if (perfilAtual !== "empresa") {
+        alert("O dashboard analítico é exclusivo do perfil Empresa.");
+        return;
+    }
+
     const area = elemento("areaPerfis");
 
     if (area) {
@@ -964,27 +1307,30 @@ function abrirDashboardOriginal() {
 
     if (!botao) {
         botao = document.createElement("button");
+
         botao.id = "botaoTrocarPerfil";
         botao.textContent = "Trocar perfil";
 
         botao.addEventListener("click", () => {
-            const tela = elemento("areaPerfis");
-
-            if (tela) {
-                tela.style.display = "flex";
-                mostrarSelecaoPerfis();
-            }
+            mostrarSelecaoPerfis();
         });
 
         document.body.appendChild(botao);
     }
 
+    botao.style.display = "block";
+
     const dashboard = elemento("dashboard");
 
     if (dashboard) {
-        dashboard.scrollIntoView({ behavior: "smooth" });
+        dashboard.scrollIntoView({
+            behavior: "smooth"
+        });
     } else {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo({
+            top: 0,
+            behavior: "smooth"
+        });
     }
 }
 
@@ -996,21 +1342,48 @@ function iniciarAplicacao() {
     carregarDadosPython();
 
     const botaoLocalizacao = elemento("btnLocalizacao");
+
     if (botaoLocalizacao) {
-        botaoLocalizacao.addEventListener("click", obterLocalizacao);
+        botaoLocalizacao.addEventListener(
+            "click",
+            obterLocalizacao
+        );
     }
 
     const botaoCalcular = elemento("btnCalcular");
+
     if (botaoCalcular) {
-        botaoCalcular.addEventListener("click", calcularSimulacao);
+        botaoCalcular.addEventListener(
+            "click",
+            calcularSimulacao
+        );
+    }
+
+    const tipoRota =
+        elemento("tipoRota") ||
+        elemento("tipoPercurso");
+
+    if (tipoRota) {
+        tipoRota.addEventListener(
+            "change",
+            controlarCampoRetorno
+        );
+
+        controlarCampoRetorno();
     }
 
     criarInterfacePerfis();
 }
 
-// Garante a execução mesmo se o DOM já estiver carregado.
+/* =========================
+   EXECUÇÃO
+========================= */
+
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", iniciarAplicacao);
+    document.addEventListener(
+        "DOMContentLoaded",
+        iniciarAplicacao
+    );
 } else {
     iniciarAplicacao();
 }
