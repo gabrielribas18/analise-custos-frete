@@ -1,1263 +1,285 @@
 
-/* =====================================================
-   FREIGHT ANALYTICS | AGRÁRIA
-   Dashboard, simulações e perfis demonstrativos
-   ===================================================== */
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-let graficoCustos = null;
-let graficoLSTM = null;
-let perfilAtual = null;
+    <title>Freight Analytics | Agrária</title>
 
-/* =====================================================
-   FRETES DEMONSTRATIVOS
-   ===================================================== */
+    <meta name="description" content="Plataforma de análise de custos de frete da Agrária.">
 
-let fretesDemo = [
-    {
-        codigo: "FRT001",
-        origem: "Guarapuava - PR",
-        destino: "Cascavel - PR",
-        carga: "Soja",
-        peso: 32,
-        motorista: "Carlos Henrique",
-        placa: "ABC-1D23",
-        valor: 2800,
-        status: "Disponível"
-    },
-    {
-        codigo: "FRT002",
-        origem: "Guarapuava - PR",
-        destino: "Ponta Grossa - PR",
-        carga: "Milho",
-        peso: 28,
-        motorista: "João Martins",
-        placa: "DEF-4G56",
-        valor: 2200,
-        status: "Em transporte"
-    }
-];
+    <!-- CSS principal -->
+    <link rel="stylesheet" href="src/style.css">
 
-/* =====================================================
-   FUNÇÕES AUXILIARES
-   ===================================================== */
+    <!-- Biblioteca dos gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-function elemento(id) {
-    return document.getElementById(id);
-}
+    <!-- JavaScript da aplicação -->
+    <script src="src/script.js" defer></script>
+</head>
 
-function formatarMoeda(valor) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL"
-    });
-}
+<body>
 
-function atualizarTexto(id, valor) {
-    const campo = elemento(id);
+    <!-- MENU LATERAL -->
+    <aside class="sidebar">
 
-    if (campo && valor !== undefined && valor !== null) {
-        campo.textContent = valor;
-    }
-}
+        <div class="logo">
+            <h2>FREIGHT <span>ANALYTICS</span></h2>
+            <small>AGRÁRIA</small>
+        </div>
 
-function primeiroValor(objeto, nomes, padrao = undefined) {
-    for (const nome of nomes) {
-        if (
-            objeto &&
-            objeto[nome] !== undefined &&
-            objeto[nome] !== null
-        ) {
-            return objeto[nome];
-        }
-    }
+        <nav>
+            <a href="#indicadores" class="active">Visão geral</a>
+            <a href="#analise">Análise de custos</a>
+            <a href="#inteligencia">Inteligência artificial</a>
+            <a href="#simulacao">Simulação de frete</a>
+        </nav>
 
-    return padrao;
-}
+    </aside>
 
-/* =====================================================
-   CARREGAMENTO DOS DADOS DO PYTHON
-   ===================================================== */
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="main-content">
 
-async function carregarDadosPython() {
-    try {
-        const resposta = await fetch("dados.json?v=" + Date.now());
+        <!-- CABEÇALHO -->
+        <header class="topbar">
 
-        if (!resposta.ok) {
-            throw new Error("Erro ao carregar dados.json");
-        }
-
-        const dados = await resposta.json();
-
-        atualizarIndicadores(dados);
-        criarGraficoCustos(dados);
-        atualizarInteligenciaArtificial(dados);
-
-    } catch (erro) {
-        console.error("Erro ao carregar dados:", erro);
-    }
-}
-
-/* =====================================================
-   INDICADORES PRINCIPAIS
-   ===================================================== */
-
-function atualizarIndicadores(dados) {
-    const totalFretes = primeiroValor(
-        dados,
-        ["totalFretes", "total_fretes"],
-        0
-    );
-
-    const custoTotal = primeiroValor(
-        dados,
-        ["custoTotal", "custo_total"],
-        0
-    );
-
-    const custoMedio = primeiroValor(
-        dados,
-        ["custoMedio", "custo_medio"],
-        0
-    );
-
-    const diesel = primeiroValor(
-        dados,
-        ["dieselS10PR", "dieselS10", "precoDiesel", "diesel_s10_pr"],
-        null
-    );
-
-    atualizarTexto(
-        "totalFretes",
-        Number(totalFretes).toLocaleString("pt-BR")
-    );
-
-    atualizarTexto("custoTotal", formatarMoeda(custoTotal));
-    atualizarTexto("custoMedio", formatarMoeda(custoMedio));
-
-    if (diesel !== null) {
-        atualizarTexto("precoDieselMedio", formatarMoeda(diesel));
-
-        // Preenche automaticamente o preço do diesel no simulador.
-        if (elemento("diesel")) {
-            elemento("diesel").value = Number(diesel).toFixed(2);
-        }
-    }
-
-    const dataDiesel = primeiroValor(
-        dados,
-        ["dataDiesel", "data_diesel", "periodoDiesel"],
-        null
-    );
-
-    if (dataDiesel) {
-        atualizarTexto("dataDiesel", "Fonte: ANP | " + dataDiesel);
-    }
-}
-
-/* =====================================================
-   GRÁFICO DE CUSTOS
-   ===================================================== */
-
-function criarGraficoCustos(dados) {
-    const canvas = elemento("graficoCustosChart");
-
-    if (!canvas || typeof Chart === "undefined") return;
-
-    const registros = primeiroValor(
-        dados,
-        ["custosMensais", "custosPorMes", "custos_mensais", "mensal"],
-        []
-    );
-
-    let labels = [];
-    let valores = [];
-
-    if (Array.isArray(registros)) {
-        labels = registros.map(item => {
-            if (typeof item === "string") return item;
-
-            return primeiroValor(
-                item,
-                ["mes", "periodo", "label", "data"],
-                ""
-            );
-        });
-
-        valores = registros.map(item => {
-            if (typeof item === "number") return item;
-
-            return Number(
-                primeiroValor(
-                    item,
-                    ["custo", "valor", "total", "custoTotal"],
-                    0
-                )
-            );
-        });
-    }
-
-    if (graficoCustos) {
-        graficoCustos.destroy();
-    }
-
-    graficoCustos = new Chart(canvas, {
-        type: "line",
-
-        data: {
-            labels: labels,
-
-            datasets: [{
-                label: "Custo dos fretes",
-                data: valores,
-                borderColor: "#2563eb",
-                backgroundColor: "rgba(37, 99, 235, 0.12)",
-                borderWidth: 2,
-                fill: true,
-                tension: 0.3
-            }]
-        },
-
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-
-            plugins: {
-                legend: {
-                    display: true
-                }
-            },
-
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: valor => formatarMoeda(valor)
-                    }
-                }
-            }
-        }
-    });
-}
-
-/* =====================================================
-   INTELIGÊNCIA ARTIFICIAL - LSTM
-   ===================================================== */
-
-function atualizarInteligenciaArtificial(dados) {
-    const ia = primeiroValor(
-        dados,
-        ["lstm", "inteligenciaArtificial", "inteligencia_artificial"],
-        dados
-    );
-
-    const mae = primeiroValor(ia, ["mae", "MAE"], null);
-    const rmse = primeiroValor(ia, ["rmse", "RMSE"], null);
-    const r2 = primeiroValor(ia, ["r2", "R2", "r_squared"], null);
-
-    const totalPrevisoes = primeiroValor(
-        ia,
-        ["totalPredicoes", "totalPrevisoes", "totalTeste", "total_teste"],
-        null
-    );
-
-    atualizarTexto(
-        "lstmMAE",
-        mae !== null ? formatarMoeda(mae) : "--"
-    );
-
-    atualizarTexto(
-        "lstmRMSE",
-        rmse !== null ? formatarMoeda(rmse) : "--"
-    );
-
-    atualizarTexto(
-        "lstmR2",
-        r2 !== null ? Number(r2).toFixed(4) : "--"
-    );
-
-    atualizarTexto(
-        "totalPrevisoes",
-        totalPrevisoes !== null
-            ? Number(totalPrevisoes).toLocaleString("pt-BR")
-            : "--"
-    );
-
-    criarGraficoLSTM(ia);
-}
-
-function criarGraficoLSTM(ia) {
-    const canvas = elemento("graficoLSTM");
-
-    if (!canvas || typeof Chart === "undefined") return;
-
-    const reais = primeiroValor(
-        ia,
-        ["valoresReais", "real", "y_test", "valores_reais"],
-        []
-    );
-
-    const previstos = primeiroValor(
-        ia,
-        ["valoresPrevistos", "previsto", "y_pred", "valores_previstos"],
-        []
-    );
-
-    if (
-        !Array.isArray(reais) ||
-        !Array.isArray(previstos) ||
-        reais.length === 0 ||
-        previstos.length === 0
-    ) {
-        console.warn(
-            "Os dados históricos da LSTM não foram encontrados no dados.json."
-        );
-        return;
-    }
-
-    if (graficoLSTM) {
-        graficoLSTM.destroy();
-    }
-
-    const quantidade = Math.min(reais.length, previstos.length);
-
-    graficoLSTM = new Chart(canvas, {
-        type: "line",
-
-        data: {
-            labels: Array.from(
-                { length: quantidade },
-                (_, i) => i + 1
-            ),
-
-            datasets: [
-                {
-                    label: "Valores reais",
-                    data: reais.slice(0, quantidade),
-                    borderColor: "#2563eb",
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.2
-                },
-                {
-                    label: "Valores previstos",
-                    data: previstos.slice(0, quantidade),
-                    borderColor: "#f59e0b",
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.2
-                }
-            ]
-        },
-
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-
-            plugins: {
-                legend: {
-                    display: true
-                }
-            }
-        }
-    });
-}
-
-/* =====================================================
-   LOCALIZAÇÃO
-   ===================================================== */
-
-function obterLocalizacao() {
-    if (!navigator.geolocation) {
-        alert("Seu navegador não oferece suporte à localização.");
-        return;
-    }
-
-    const campoOrigem = elemento("origem");
-
-    if (campoOrigem) {
-        campoOrigem.value = "Obtendo localização...";
-    }
-
-    navigator.geolocation.getCurrentPosition(
-        async posicao => {
-            const latitude = posicao.coords.latitude;
-            const longitude = posicao.coords.longitude;
-
-            try {
-                const resposta = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`
-                );
-
-                const dados = await resposta.json();
-
-                if (campoOrigem) {
-                    campoOrigem.value =
-                        dados.display_name ||
-                        `${latitude}, ${longitude}`;
-                }
-
-            } catch (erro) {
-                console.error("Erro ao localizar endereço:", erro);
-
-                if (campoOrigem) {
-                    campoOrigem.value = `${latitude}, ${longitude}`;
-                }
-            }
-        },
-
-        erro => {
-            console.error(erro);
-
-            if (campoOrigem) {
-                campoOrigem.value = "";
-            }
-
-            alert("Não foi possível obter sua localização. Verifique a permissão do navegador.");
-        },
-
-        {
-            enableHighAccuracy: true,
-            timeout: 15000
-        }
-    );
-}
-
-/* =====================================================
-   BUSCA DE COORDENADAS
-   ===================================================== */
-
-async function buscarCoordenadas(endereco) {
-    const resposta = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endereco)}`
-    );
-
-    if (!resposta.ok) {
-        throw new Error("Erro ao consultar endereço.");
-    }
-
-    const dados = await resposta.json();
-
-    if (!dados.length) {
-        throw new Error("Endereço não encontrado: " + endereco);
-    }
-
-    return {
-        lat: Number(dados[0].lat),
-        lon: Number(dados[0].lon)
-    };
-}
-
-/* =====================================================
-   CÁLCULO DE ROTAS
-   ===================================================== */
-
-async function buscarRota(origem, destino) {
-    const url =
-        `https://router.project-osrm.org/route/v1/driving/` +
-        `${origem.lon},${origem.lat};${destino.lon},${destino.lat}` +
-        "?overview=false";
-
-    const resposta = await fetch(url);
-
-    if (!resposta.ok) {
-        throw new Error("Erro ao calcular rota.");
-    }
-
-    const dados = await resposta.json();
-
-    if (!dados.routes || !dados.routes.length) {
-        throw new Error("Não foi possível encontrar a rota.");
-    }
-
-    return dados.routes[0];
-}
-
-/* =====================================================
-   SIMULAÇÃO DE TRANSPORTE
-   ===================================================== */
-
-async function calcularSimulacao() {
-    const origem = elemento("origem")?.value.trim();
-    const destino = elemento("destino")?.value.trim();
-
-    const tipoPercurso = elemento("tipoPercurso")?.value || "ida";
-
-    const destinoRetorno = elemento("destinoRetorno")?.value.trim();
-
-    const consumo = Number(elemento("consumo")?.value);
-    const precoDiesel = Number(elemento("diesel")?.value);
-
-    const resultado = elemento("resultadoSimulacao");
-
-    if (!origem || !destino) {
-        alert("Informe o local de partida e o destino.");
-        return;
-    }
-
-    if (tipoPercurso === "personalizado" && !destinoRetorno) {
-        alert("Informe o destino do retorno.");
-        return;
-    }
-
-    if (!consumo || consumo <= 0) {
-        alert("Informe um consumo válido para o veículo.");
-        return;
-    }
-
-    if (!precoDiesel || precoDiesel <= 0) {
-        alert("Informe um preço válido para o diesel.");
-        return;
-    }
-
-    resultado.innerHTML = "<p>Calculando rota e custos...</p>";
-
-    try {
-        const coordenadasOrigem = await buscarCoordenadas(origem);
-        const coordenadasDestino = await buscarCoordenadas(destino);
-
-        const rotaIda = await buscarRota(
-            coordenadasOrigem,
-            coordenadasDestino
-        );
-
-        let distanciaTotal = rotaIda.distance / 1000;
-        let duracaoTotal = rotaIda.duration / 3600;
-
-        if (tipoPercurso === "ida_volta") {
-            const rotaVolta = await buscarRota(
-                coordenadasDestino,
-                coordenadasOrigem
-            );
-
-            distanciaTotal += rotaVolta.distance / 1000;
-            duracaoTotal += rotaVolta.duration / 3600;
-        }
-
-        if (tipoPercurso === "personalizado") {
-            const coordenadasRetorno =
-                await buscarCoordenadas(destinoRetorno);
-
-            const rotaRetorno = await buscarRota(
-                coordenadasDestino,
-                coordenadasRetorno
-            );
-
-            distanciaTotal += rotaRetorno.distance / 1000;
-            duracaoTotal += rotaRetorno.duration / 3600;
-        }
-
-        const litros = distanciaTotal / consumo;
-        const custoCombustivel = litros * precoDiesel;
-
-        const veiculo = elemento("veiculo")?.value || "Não informado";
-
-        resultado.innerHTML = `
-            <h3>Resultado da simulação</h3>
-
-            <p><strong>Veículo:</strong> ${veiculo}</p>
-
-            <p><strong>Origem:</strong> ${origem}</p>
-
-            <p><strong>Destino:</strong> ${destino}</p>
-
-            <p><strong>Distância total:</strong> ${distanciaTotal.toFixed(1)} km</p>
-
-            <p><strong>Tempo estimado:</strong> ${duracaoTotal.toFixed(1)} horas</p>
-
-            <p><strong>Consumo médio:</strong> ${consumo} km/L</p>
-
-            <p><strong>Combustível estimado:</strong> ${litros.toFixed(1)} litros</p>
-
-            <p><strong>Preço do diesel:</strong> ${formatarMoeda(precoDiesel)}</p>
-
-            <h3>Custo estimado de combustível: ${formatarMoeda(custoCombustivel)}</h3>
-
-            <small>Estimativa baseada na distância rodoviária calculada. Não inclui pedágios, alimentação, manutenção ou outros custos operacionais.</small>
-        `;
-
-    } catch (erro) {
-        console.error("Erro na simulação:", erro);
-
-        resultado.innerHTML = `
-            <p>Não foi possível calcular a rota.</p>
-            <p>Verifique os endereços e tente novamente.</p>
-        `;
-    }
-}
-
-/* =====================================================
-   CONTROLE DO CAMPO DE RETORNO
-   ===================================================== */
-
-function controlarCampoRetorno() {
-    const tipo = elemento("tipoPercurso");
-    const campo = elemento("campoRetorno");
-
-    if (!tipo || !campo) return;
-
-    campo.style.display =
-        tipo.value === "personalizado" ? "block" : "none";
-}
-
-/* =====================================================
-   PERFIS DEMONSTRATIVOS
-   ===================================================== */
-
-function carregarBibliotecaQR() {
-    if (window.QRCode) {
-        return Promise.resolve();
-    }
-
-    return new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-
-        script.src =
-            "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
-
-        script.onload = resolve;
-        script.onerror = reject;
-
-        document.head.appendChild(script);
-    });
-}
-
-/* =====================================================
-   CRIAÇÃO DA INTERFACE DOS PERFIS
-   ===================================================== */
-
-function criarInterfacePerfis() {
-    if (elemento("areaPerfis")) return;
-
-    const estilos = document.createElement("style");
-
-    estilos.textContent = `
-        #areaPerfis {
-            position: fixed;
-            inset: 0;
-            z-index: 99999;
-            background: #f3f5f8;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            overflow-y: auto;
-            font-family: Arial, sans-serif;
-        }
-
-        .perfil-container {
-            width: 100%;
-            max-width: 850px;
-            margin: auto;
-        }
-
-        .perfil-titulo {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #172033;
-        }
-
-        .perfil-titulo h1 {
-            margin-bottom: 10px;
-            font-size: 30px;
-        }
-
-        .perfil-titulo p {
-            color: #64748b;
-            margin-top: 8px;
-        }
-
-        .perfil-opcoes {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 20px;
-        }
-
-        .perfil-card {
-            background: white;
-            padding: 30px;
-            border-radius: 14px;
-            border: 1px solid #e2e8f0;
-            cursor: pointer;
-            transition: .2s;
-            text-align: center;
-        }
-
-        .perfil-card:hover {
-            transform: translateY(-4px);
-            border-color: #2563eb;
-            box-shadow: 0 8px 25px rgba(0,0,0,.08);
-        }
-
-        .perfil-card h2 {
-            color: #172033;
-            margin-bottom: 12px;
-        }
-
-        .perfil-card p {
-            color: #64748b;
-            line-height: 1.5;
-            margin-bottom: 20px;
-        }
-
-        .perfil-botao {
-            background: #2563eb;
-            color: white;
-            border: 0;
-            padding: 12px 20px;
-            border-radius: 7px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .perfil-painel {
-            background: white;
-            padding: 25px;
-            border-radius: 12px;
-            width: 100%;
-            max-width: 900px;
-            margin: auto;
-            box-shadow: 0 5px 25px rgba(0,0,0,.06);
-            box-sizing: border-box;
-        }
-
-        .perfil-painel h2 {
-            margin-bottom: 15px;
-            color: #172033;
-        }
-
-        .perfil-painel input {
-            width: 100%;
-            padding: 11px;
-            margin: 7px 0 14px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            box-sizing: border-box;
-        }
-
-        .perfil-painel label {
-            font-size: 13px;
-            font-weight: bold;
-            color: #334155;
-        }
-
-        .perfil-frete {
-            padding: 15px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            margin: 12px 0;
-            background: #fff;
-        }
-
-        .perfil-frete p {
-            margin: 6px 0;
-            color: #475569;
-        }
-
-        .perfil-acoes {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 20px;
-        }
-
-        .perfil-secundario {
-            background: #64748b;
-            color: white;
-            border: 0;
-            padding: 11px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        #botaoTrocarPerfil {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 9998;
-            background: #172033;
-            color: white;
-            border: 0;
-            border-radius: 8px;
-            padding: 13px 18px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,.2);
-        }
-
-        @media(max-width: 600px) {
-            .perfil-titulo h1 {
-                font-size: 24px;
-            }
-
-            .perfil-painel {
-                padding: 18px;
-            }
-        }
-    `;
-
-    document.head.appendChild(estilos);
-
-    const area = document.createElement("div");
-    area.id = "areaPerfis";
-
-    document.body.appendChild(area);
-
-    mostrarSelecaoPerfis();
-}
-
-/* =====================================================
-   SELEÇÃO DE PERFIL
-   ===================================================== */
-
-function mostrarSelecaoPerfis() {
-    const area = elemento("areaPerfis");
-
-    if (!area) return;
-
-    area.style.display = "flex";
-
-    area.innerHTML = `
-        <div class="perfil-container">
-
-            <div class="perfil-titulo">
-                <h1>Freight Analytics | Agrária</h1>
-                <p>Selecione um perfil para acessar a plataforma.</p>
-                <p><strong>Ambiente demonstrativo</strong></p>
+            <div>
+                <h1>Freight Analytics</h1>
+                <p>Plataforma de análise e gestão de custos de transporte</p>
             </div>
 
-            <div class="perfil-opcoes">
+            <div class="status">
+                AMBIENTE DEMONSTRATIVO
+            </div>
 
-                <div class="perfil-card" onclick="abrirPerfil('empresa')">
-                    <h2>Empresa</h2>
-                    <p>Cadastre fretes, acompanhe registros e gere QR Codes.</p>
-                    <button class="perfil-botao">Acessar como empresa</button>
+        </header>
+
+        <!-- INDICADORES -->
+        <section id="indicadores">
+
+            <div class="section-heading">
+                <h2>Visão geral</h2>
+                <p>Indicadores gerais da base de fretes</p>
+            </div>
+
+            <div class="cards">
+
+                <div class="card">
+                    <span>Total de fretes</span>
+                    <h3 id="totalFretes">--</h3>
+                    <small>Quantidade de fretes registrados</small>
                 </div>
 
-                <div class="perfil-card" onclick="abrirPerfil('caminhoneiro')">
-                    <h2>Caminhoneiro</h2>
-                    <p>Consulte fretes e visualize informações de transporte.</p>
-                    <button class="perfil-botao">Acessar como caminhoneiro</button>
+                <div class="card">
+                    <span>Total de registros</span>
+                    <h3 id="totalRegistros">--</h3>
+                    <small>Registros presentes na base</small>
+                </div>
+
+                <div class="card">
+                    <span>Custo total</span>
+                    <h3 id="custoTotal">--</h3>
+                    <small>Valor acumulado dos fretes</small>
+                </div>
+
+                <div class="card">
+                    <span>Custo médio</span>
+                    <h3 id="custoMedio">--</h3>
+                    <small>Custo médio por frete</small>
                 </div>
 
             </div>
-        </div>
-    `;
-}
 
-function abrirPerfil(perfil) {
-    perfilAtual = perfil;
+        </section>
 
-    if (perfil === "empresa") {
-        mostrarPainelEmpresa();
-    } else {
-        mostrarPainelCaminhoneiro();
-    }
-}
+        <!-- ANÁLISE DE CUSTOS -->
+        <section id="analise">
 
-/* =====================================================
-   PAINEL DA EMPRESA
-   ===================================================== */
-
-function mostrarPainelEmpresa() {
-    const area = elemento("areaPerfis");
-
-    area.innerHTML = `
-        <div class="perfil-painel">
-
-            <h2>Painel da Empresa</h2>
-            <p>Cadastro de fretes demonstrativos.</p>
-
-            <form id="formFreteDemo">
-
-                <label>Origem</label>
-                <input id="demoOrigem" required placeholder="Ex.: Guarapuava - PR">
-
-                <label>Destino</label>
-                <input id="demoDestino" required placeholder="Ex.: Cascavel - PR">
-
-                <label>Tipo de carga</label>
-                <input id="demoCarga" required placeholder="Ex.: Soja">
-
-                <label>Peso em toneladas</label>
-                <input id="demoPeso" type="number" min="0.1" step="0.1" required>
-
-                <label>Motorista</label>
-                <input id="demoMotorista" required>
-
-                <label>Placa do veículo</label>
-                <input id="demoPlaca" required>
-
-                <label>Valor do frete (R$)</label>
-                <input id="demoValor" type="number" min="0" step="0.01" required>
-
-                <button class="perfil-botao" type="submit">
-                    Cadastrar frete
-                </button>
-
-            </form>
-
-            <hr style="margin:25px 0;border:0;border-top:1px solid #e2e8f0;">
-
-            <h2>Fretes cadastrados</h2>
-
-            <div id="listaFretesEmpresa"></div>
-
-            <div class="perfil-acoes">
-                <button class="perfil-secundario" onclick="abrirDashboardOriginal()">
-                    Abrir dashboard analítico
-                </button>
-
-                <button class="perfil-secundario" onclick="mostrarSelecaoPerfis()">
-                    Trocar perfil
-                </button>
+            <div class="section-heading">
+                <h2>Análise de custos</h2>
+                <p>Evolução mensal dos custos de transporte</p>
             </div>
 
-        </div>
-    `;
+            <div class="panel">
 
-    elemento("formFreteDemo").addEventListener(
-        "submit",
-        cadastrarFreteDemo
-    );
+                <h3>Custos mensais de frete</h3>
 
-    atualizarListaEmpresa();
-}
-
-function cadastrarFreteDemo(evento) {
-    evento.preventDefault();
-
-    const novoFrete = {
-        codigo: "FRT" + String(Date.now()).slice(-6),
-        origem: elemento("demoOrigem").value.trim(),
-        destino: elemento("demoDestino").value.trim(),
-        carga: elemento("demoCarga").value.trim(),
-        peso: Number(elemento("demoPeso").value),
-        motorista: elemento("demoMotorista").value.trim(),
-        placa: elemento("demoPlaca").value.trim().toUpperCase(),
-        valor: Number(elemento("demoValor").value),
-        status: "Disponível"
-    };
-
-    fretesDemo.push(novoFrete);
-
-    atualizarListaEmpresa();
-
-    elemento("formFreteDemo").reset();
-
-    alert("Frete demonstrativo cadastrado com sucesso!");
-}
-
-function atualizarListaEmpresa() {
-    const lista = elemento("listaFretesEmpresa");
-
-    if (!lista) return;
-
-    lista.innerHTML = "";
-
-    fretesDemo.forEach(frete => {
-        const card = document.createElement("div");
-        card.className = "perfil-frete";
-
-        const titulo = document.createElement("strong");
-        titulo.textContent =
-            `${frete.codigo} | ${frete.origem} → ${frete.destino}`;
-
-        const detalhes = document.createElement("p");
-        detalhes.textContent =
-            `Carga: ${frete.carga} | ${frete.peso} toneladas | Motorista: ${frete.motorista}`;
-
-        const placa = document.createElement("p");
-        placa.textContent = `Placa: ${frete.placa}`;
-
-        const valor = document.createElement("p");
-        valor.textContent = `Valor: ${formatarMoeda(frete.valor)}`;
-
-        const status = document.createElement("p");
-        status.textContent = `Status: ${frete.status}`;
-
-        const botao = document.createElement("button");
-        botao.className = "perfil-botao";
-        botao.textContent = "Gerar QR Code";
-
-        botao.addEventListener("click", () => {
-            gerarQRCodeFrete(frete.codigo);
-        });
-
-        card.append(
-            titulo,
-            detalhes,
-            placa,
-            valor,
-            status,
-            botao
-        );
-
-        lista.appendChild(card);
-    });
-}
-
-/* =====================================================
-   QR CODE
-   ===================================================== */
-
-async function gerarQRCodeFrete(codigo) {
-    const frete = fretesDemo.find(
-        item => item.codigo === codigo
-    );
-
-    if (!frete) return;
-
-    try {
-        await carregarBibliotecaQR();
-
-        let painelQR = elemento("painelQRCode");
-
-        if (!painelQR) {
-            painelQR = document.createElement("div");
-            painelQR.id = "painelQRCode";
-            painelQR.className = "perfil-frete";
-
-            elemento("areaPerfis")
-                .querySelector(".perfil-painel")
-                .appendChild(painelQR);
-        }
-
-        painelQR.innerHTML = `
-            <h3>QR Code do frete ${frete.codigo}</h3>
-            <div id="qrImagem" style="margin:15px 0;"></div>
-            <p>Consulte este frete utilizando o código:</p>
-            <strong>${frete.codigo}</strong>
-        `;
-
-        new QRCode(elemento("qrImagem"), {
-            text: frete.codigo,
-            width: 180,
-            height: 180
-        });
-
-        painelQR.scrollIntoView({
-            behavior: "smooth"
-        });
-
-    } catch (erro) {
-        console.error("Erro ao gerar QR Code:", erro);
-        alert("Não foi possível carregar o gerador de QR Code.");
-    }
-}
-
-/* =====================================================
-   PAINEL DO CAMINHONEIRO
-   ===================================================== */
-
-function mostrarPainelCaminhoneiro() {
-    const area = elemento("areaPerfis");
-
-    area.innerHTML = `
-        <div class="perfil-painel">
-
-            <h2>Painel do Caminhoneiro</h2>
-            <p>Consulte os fretes do ambiente demonstrativo.</p>
-
-            <label for="codigoConsulta">Código do frete</label>
-
-            <input
-                id="codigoConsulta"
-                placeholder="Ex.: FRT001"
-            >
-
-            <button
-                class="perfil-botao"
-                onclick="consultarFreteDemo()"
-            >
-                Consultar frete
-            </button>
-
-            <div id="resultadoConsulta" style="margin-top:20px;"></div>
-
-            <hr style="margin:25px 0;border:0;border-top:1px solid #e2e8f0;">
-
-            <h2>Fretes demonstrativos</h2>
-
-            <div id="listaFretesCaminhoneiro"></div>
-
-            <div class="perfil-acoes">
-
-                <button class="perfil-secundario" onclick="abrirDashboardOriginal()">
-                    Abrir dashboard analítico
-                </button>
-
-                <button class="perfil-secundario" onclick="mostrarSelecaoPerfis()">
-                    Trocar perfil
-                </button>
+                <div class="chart-placeholder">
+                    <canvas id="graficoCustosChart"></canvas>
+                </div>
 
             </div>
 
-        </div>
-    `;
+            <div class="cards" style="margin-top: 20px;">
 
-    atualizarFretesCaminhoneiro();
-}
+                <div class="card">
+                    <span>Preço médio do Diesel S10</span>
+                    <h3 id="dieselS10">--</h3>
+                    <small id="dataDiesel">Fonte: ANP</small>
+                </div>
 
-function consultarFreteDemo() {
-    const codigo = elemento("codigoConsulta")
-        .value.trim().toUpperCase();
+            </div>
 
-    const frete = fretesDemo.find(
-        item => item.codigo.toUpperCase() === codigo
-    );
+        </section>
 
-    const resultado = elemento("resultadoConsulta");
+        <!-- INTELIGÊNCIA ARTIFICIAL -->
+        <section id="inteligencia">
 
-    resultado.innerHTML = "";
+            <div class="section-heading">
+                <h2>Inteligência artificial</h2>
+                <p>Resultados do modelo de previsão LSTM</p>
+            </div>
 
-    if (!frete) {
-        resultado.textContent =
-            "Nenhum frete encontrado com esse código.";
+            <div class="cards">
 
-        return;
-    }
+                <div class="card">
+                    <span>MAE</span>
+                    <h3 id="lstmMAE">--</h3>
+                    <small>Erro absoluto médio</small>
+                </div>
 
-    const titulo = document.createElement("h3");
-    titulo.textContent = `Frete ${frete.codigo}`;
+                <div class="card">
+                    <span>RMSE</span>
+                    <h3 id="lstmRMSE">--</h3>
+                    <small>Raiz do erro quadrático médio</small>
+                </div>
 
-    const informacoes = document.createElement("div");
-    informacoes.className = "perfil-frete";
+                <div class="card">
+                    <span>R²</span>
+                    <h3 id="lstmR2">--</h3>
+                    <small>Coeficiente de determinação</small>
+                </div>
 
-    const dados = [
-        `Origem: ${frete.origem}`,
-        `Destino: ${frete.destino}`,
-        `Carga: ${frete.carga}`,
-        `Peso: ${frete.peso} toneladas`,
-        `Motorista: ${frete.motorista}`,
-        `Placa: ${frete.placa}`,
-        `Valor: ${formatarMoeda(frete.valor)}`,
-        `Status: ${frete.status}`
-    ];
+                <div class="card">
+                    <span>Quantidade de previsões</span>
+                    <h3 id="totalPrevisoes">--</h3>
+                    <small>Registros avaliados pelo modelo</small>
+                </div>
 
-    dados.forEach(texto => {
-        const paragrafo = document.createElement("p");
-        paragrafo.textContent = texto;
-        informacoes.appendChild(paragrafo);
-    });
+            </div>
 
-    resultado.append(titulo, informacoes);
-}
+            <div class="panel">
 
-function atualizarFretesCaminhoneiro() {
-    const lista = elemento("listaFretesCaminhoneiro");
+                <h3>Valores reais x valores previstos</h3>
 
-    if (!lista) return;
+                <div class="chart-placeholder">
+                    <canvas id="graficoLSTM"></canvas>
+                </div>
 
-    lista.innerHTML = "";
+            </div>
 
-    fretesDemo.forEach(frete => {
-        const card = document.createElement("div");
-        card.className = "perfil-frete";
+        </section>
 
-        const titulo = document.createElement("strong");
-        titulo.textContent =
-            `${frete.codigo} | ${frete.origem} → ${frete.destino}`;
+        <!-- SIMULAÇÃO DE TRANSPORTE -->
+        <section id="simulacao">
 
-        const carga = document.createElement("p");
-        carga.textContent =
-            `Carga: ${frete.carga} | ${frete.peso} toneladas`;
+            <div class="section-heading">
+                <h2>Simulação de transporte</h2>
+                <p>Estime distância, consumo e custo de combustível de uma rota</p>
+            </div>
 
-        const status = document.createElement("p");
-        status.textContent = `Status: ${frete.status}`;
+            <div class="panel">
 
-        const botao = document.createElement("button");
-        botao.className = "perfil-botao";
-        botao.textContent = "Consultar";
+                <h3>Dados da simulação</h3>
 
-        botao.addEventListener("click", () => {
-            elemento("codigoConsulta").value = frete.codigo;
-            consultarFreteDemo();
-        });
+                <div class="simulation-grid">
 
-        card.append(titulo, carga, status, botao);
-        lista.appendChild(card);
-    });
-}
+                    <div>
+                        <label for="veiculo">Veículo</label>
+                        <select id="veiculo">
+                            <option value="Caminhão">Caminhão</option>
+                            <option value="Carreta">Carreta</option>
+                            <option value="Bitrem">Bitrem</option>
+                            <option value="Rodotrem">Rodotrem</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
 
-/* =====================================================
-   ABRIR DASHBOARD E TROCAR PERFIL
-   ===================================================== */
+                    <div>
+                        <label for="consumo">Consumo médio (km/L)</label>
+                        <input
+                            type="number"
+                            id="consumo"
+                            min="0.1"
+                            step="0.1"
+                            placeholder="Ex.: 2.5"
+                        >
+                    </div>
 
-function abrirDashboardOriginal() {
-    const area = elemento("areaPerfis");
+                    <div>
+                        <label for="origem">Origem</label>
+                        <input
+                            type="text"
+                            id="origem"
+                            placeholder="Ex.: Guarapuava - PR"
+                        >
 
-    if (area) {
-        area.style.display = "none";
-    }
+                        <button type="button" id="usarLocalizacao">
+                            Usar minha localização
+                        </button>
+                    </div>
 
-    let botao = elemento("botaoTrocarPerfil");
+                    <div>
+                        <label for="destino">Destino</label>
+                        <input
+                            type="text"
+                            id="destino"
+                            placeholder="Ex.: Cascavel - PR"
+                        >
+                    </div>
 
-    if (!botao) {
-        botao = document.createElement("button");
+                    <div>
+                        <label for="tipoPercurso">Tipo de percurso</label>
+                        <select id="tipoPercurso">
+                            <option value="somente_ida">Somente ida</option>
+                            <option value="ida_volta">Ida e volta</option>
+                            <option value="personalizado">Retorno personalizado</option>
+                        </select>
+                    </div>
 
-        botao.id = "botaoTrocarPerfil";
-        botao.textContent = "Trocar perfil";
+                    <div id="campoRetorno" style="display: none;">
+                        <label for="destinoRetorno">Destino do retorno</label>
+                        <input
+                            type="text"
+                            id="destinoRetorno"
+                            placeholder="Informe o destino do retorno"
+                        >
+                    </div>
 
-        botao.addEventListener("click", () => {
-            mostrarSelecaoPerfis();
-        });
+                    <div>
+                        <label for="diesel">Preço do diesel (R$/L)</label>
+                        <input
+                            type="number"
+                            id="diesel"
+                            min="0.01"
+                            step="0.01"
+                            placeholder="Ex.: 7.31"
+                        >
+                    </div>
 
-        document.body.appendChild(botao);
-    }
+                </div>
 
-    window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-    });
-}
+                <button type="button" id="calcularSimulacao">
+                    Calcular simulação
+                </button>
 
-/* =====================================================
-   INICIALIZAÇÃO
-   ===================================================== */
+                <div id="resultadoSimulacao">
+                    <p>Preencha os dados acima para calcular o custo estimado da viagem.</p>
+                </div>
 
-function iniciarAplicacao() {
+            </div>
 
-    // Carrega os dados do dashboard.
-    carregarDadosPython();
+        </section>
 
-    // Botão de localização do HTML.
-    const botaoLocalizacao = elemento("usarLocalizacao");
+        <!-- RODAPÉ -->
+        <footer>
+            Freight Analytics | Agrária
+            <br>
+            Projeto acadêmico de análise de dados aplicada ao transporte.
+        </footer>
 
-    if (botaoLocalizacao) {
-        botaoLocalizacao.addEventListener(
-            "click",
-            obterLocalizacao
-        );
-    }
+    </main>
 
-    // Botão de cálculo do HTML.
-    const botaoCalcular = elemento("calcularSimulacao");
-
-    if (botaoCalcular) {
-        botaoCalcular.addEventListener(
-            "click",
-            calcularSimulacao
-        );
-    }
-
-    // Controle do percurso personalizado.
-    const tipoPercurso = elemento("tipoPercurso");
-
-    if (tipoPercurso) {
-        tipoPercurso.addEventListener(
-            "change",
-            controlarCampoRetorno
-        );
-
-        controlarCampoRetorno();
-    }
-
-    // Abre a seleção de perfis demonstrativos.
-    criarInterfacePerfis();
-}
-
-// Garante a execução independentemente do momento de carregamento.
-if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", iniciarAplicacao);
-} else {
-    iniciarAplicacao();
-}
+</body>
+</html>
