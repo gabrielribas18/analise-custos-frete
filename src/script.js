@@ -397,3 +397,247 @@ document.addEventListener("DOMContentLoaded", function() {
     carregarDadosPython();
     obterLocalizacao();
 });
+
+// ==========================================
+// 11. INTEGRAÇÃO DIESEL + INTELIGÊNCIA ARTIFICIAL
+// ==========================================
+
+let graficoLSTM = null;
+
+function adicionarAreaInteligencia() {
+    const menu = document.querySelector(".sidebar nav");
+
+    if (menu && !document.getElementById("linkInteligencia")) {
+        const link = document.createElement("a");
+        link.id = "linkInteligencia";
+        link.href = "#inteligencia";
+        link.textContent = "Inteligência Artificial";
+        menu.appendChild(link);
+    }
+
+    const dashboard = document.getElementById("dashboard");
+    const simulacao = document.getElementById("simulacao");
+
+    if (!dashboard || !simulacao ||
+        document.getElementById("inteligencia")) return;
+
+    // Card do diesel
+    const cards = dashboard.querySelector(".cards");
+
+    if (cards) {
+        const card = document.createElement("article");
+        card.className = "card";
+        card.innerHTML = `
+            <span>Diesel S10 - Paraná</span>
+            <h3 id="precoDieselMedio">Carregando...</h3>
+            <small id="dataDiesel">Fonte: ANP</small>
+        `;
+        cards.appendChild(card);
+    }
+
+    // Área de inteligência artificial
+    const secao = document.createElement("section");
+    secao.id = "inteligencia";
+
+    secao.innerHTML = `
+        <div class="section-heading">
+            <h2>Inteligência Artificial</h2>
+            <p>Resultados do modelo de previsão LSTM</p>
+        </div>
+
+        <div class="cards">
+            <article class="card">
+                <span>MAE</span>
+                <h3 id="lstmMAE">--</h3>
+                <small>Erro médio absoluto</small>
+            </article>
+
+            <article class="card">
+                <span>RMSE</span>
+                <h3 id="lstmRMSE">--</h3>
+                <small>Raiz do erro quadrático</small>
+            </article>
+
+            <article class="card">
+                <span>R²</span>
+                <h3 id="lstmR2">--</h3>
+                <small>Capacidade explicativa</small>
+            </article>
+
+            <article class="card">
+                <span>Previsões avaliadas</span>
+                <h3 id="totalPrevisoes">--</h3>
+                <small>Conjunto de teste</small>
+            </article>
+        </div>
+
+        <div class="panel" style="margin-top:20px;">
+            <h3>Valores reais x previstos</h3>
+            <div style="height:350px; position:relative;">
+                <canvas id="graficoLSTM"></canvas>
+            </div>
+            <p style="margin-top:15px;color:#64748b;font-size:13px;">
+                Comparação histórica entre os valores reais e as
+                previsões geradas pelo modelo LSTM.
+            </p>
+        </div>
+    `;
+
+    simulacao.parentNode.insertBefore(secao, simulacao);
+}
+
+// ==========================================
+// 12. CARREGAR TODOS OS DADOS
+// ==========================================
+
+carregarDadosPython = async function() {
+    try {
+        const resposta = await fetch("./dados.json?v=" + Date.now());
+
+        if (!resposta.ok) {
+            throw new Error("Erro ao carregar dados.json");
+        }
+
+        const dados = await resposta.json();
+
+        // Indicadores existentes
+        document.getElementById("totalFretes").textContent =
+            numero.format(dados.totalFretes);
+
+        document.getElementById("custoTotal").textContent =
+            moeda.format(dados.custoTotal);
+
+        document.getElementById("custoMedio").textContent =
+            moeda.format(dados.custoMedio);
+
+        // Gráfico mensal existente
+        criarGraficoCustos(dados.custosMensais);
+
+        // Diesel
+        if (dados.diesel) {
+            document.getElementById("precoDieselMedio").textContent =
+                moeda.format(dados.diesel.precoMedio);
+
+            document.getElementById("dataDiesel").textContent =
+                dados.diesel.estado + " | " +
+                dados.diesel.periodo + " | " +
+                dados.diesel.fonte;
+
+            // Preencher automaticamente o simulador
+            const campoDiesel = document.getElementById("diesel");
+
+            if (campoDiesel) {
+                campoDiesel.value = dados.diesel.precoMedio;
+            }
+        }
+
+        // Inteligência artificial
+        if (dados.lstm) {
+            const modelo = dados.lstm;
+
+            document.getElementById("lstmMAE").textContent =
+                moeda.format(modelo.mae);
+
+            document.getElementById("lstmRMSE").textContent =
+                moeda.format(modelo.rmse);
+
+            document.getElementById("lstmR2").textContent =
+                Number(modelo.r2).toFixed(4);
+
+            document.getElementById("totalPrevisoes").textContent =
+                numero.format(modelo.quantidadePrevisoes);
+
+            criarGraficoLSTM(modelo.previsoes);
+        }
+
+        console.log("Dados carregados com sucesso!", dados);
+
+    } catch (erro) {
+        console.error("Erro na integração:", erro);
+    }
+};
+
+// ==========================================
+// 13. GRÁFICO LSTM
+// ==========================================
+
+function criarGraficoLSTM(previsoes) {
+    const canvas = document.getElementById("graficoLSTM");
+
+    if (!canvas || typeof Chart === "undefined" ||
+        !Array.isArray(previsoes) || !previsoes.length) {
+        console.error("Não foi possível criar o gráfico LSTM.");
+        return;
+    }
+
+    if (graficoLSTM) {
+        graficoLSTM.destroy();
+    }
+
+    graficoLSTM = new Chart(canvas, {
+        type: "line",
+        data: {
+            labels: previsoes.map((item, index) =>
+                item.data || "Registro " + (index + 1)
+            ),
+            datasets: [
+                {
+                    label: "Valor real",
+                    data: previsoes.map(item => item.real),
+                    borderColor: "#2563eb",
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.2
+                },
+                {
+                    label: "Valor previsto (LSTM)",
+                    data: previsoes.map(item => item.previsto),
+                    borderColor: "#e58a26",
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: "index",
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: "top"
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ": " +
+                                moeda.format(context.raw);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: value => moeda.format(value)
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxTicksLimit: 10
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ==========================================
+// 14. INICIALIZAÇÃO DA NOVA ÁREA
+// ==========================================
+
+adicionarAreaInteligencia();
+
