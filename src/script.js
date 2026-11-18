@@ -1,15 +1,8 @@
 
-const origem = document.getElementById("origem");
-const destino = document.getElementById("destino");
-const tipoPercurso = document.getElementById("tipoPercurso");
-const campoRetorno = document.getElementById("campoRetorno");
-const destinoRetorno = document.getElementById("destinoRetorno");
-
-const botaoLocalizacao = document.getElementById("usarLocalizacao");
-const botaoCalcular = document.getElementById("calcularSimulacao");
-const resultado = document.getElementById("resultadoSimulacao");
-
-let coordenadasOrigem = null;
+// ==========================================
+// FREIGHT ANALYTICS | AGRÁRIA
+// Integração com Python + Gráfico + Simulador
+// ==========================================
 
 const moeda = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -17,25 +10,26 @@ const moeda = new Intl.NumberFormat("pt-BR", {
 });
 
 const numero = new Intl.NumberFormat("pt-BR", {
-    maximumFractionDigits: 2
+    maximumFractionDigits: 0
 });
 
-// --------------------------------------------------
-// CONEXÃO COM OS DADOS DO PYTHON
-// --------------------------------------------------
+let graficoCustos = null;
+
+// ==========================================
+// 1. CARREGAR DADOS DO PYTHON
+// ==========================================
 
 async function carregarDadosPython() {
-
     try {
-
         const resposta = await fetch("./dados.json?v=" + Date.now());
 
         if (!resposta.ok) {
-            throw new Error("Não foi possível carregar os dados.");
+            throw new Error("Não foi possível carregar dados.json");
         }
 
         const dados = await resposta.json();
 
+        // Atualiza os indicadores
         document.getElementById("totalFretes").textContent =
             numero.format(dados.totalFretes);
 
@@ -45,169 +39,204 @@ async function carregarDadosPython() {
         document.getElementById("custoMedio").textContent =
             moeda.format(dados.custoMedio);
 
+        // Atualiza o gráfico mensal
+        criarGraficoCustos(dados.custosMensais);
+
         console.log("Dados do Python carregados:", dados);
 
     } catch (erro) {
+        console.error("Erro ao carregar dados:", erro);
 
-        console.error("Erro ao carregar dados do Python:", erro);
-
+        document.getElementById("totalFretes").textContent = "Indisponível";
+        document.getElementById("custoTotal").textContent = "Indisponível";
+        document.getElementById("custoMedio").textContent = "Indisponível";
     }
 }
 
-// --------------------------------------------------
-// OPÇÕES DE PERCURSO
-// --------------------------------------------------
+// ==========================================
+// 2. CRIAR GRÁFICO DE CUSTOS MENSAIS
+// ==========================================
 
-tipoPercurso.addEventListener("change", function () {
-    campoRetorno.style.display =
-        tipoPercurso.value === "personalizado" ? "block" : "none";
-});
+function criarGraficoCustos(dadosMensais) {
+    const canvas = document.getElementById("graficoCustosChart");
 
-// --------------------------------------------------
-// LOCALIZAÇÃO AUTOMÁTICA
-// --------------------------------------------------
-
-function obterLocalizacao() {
-
-    if (!navigator.geolocation) {
-        resultado.textContent =
-            "Seu navegador não oferece suporte à localização.";
+    if (!canvas || typeof Chart === "undefined") {
+        console.error("Canvas ou biblioteca Chart.js não encontrados.");
         return;
     }
 
-    botaoLocalizacao.disabled = true;
-    resultado.textContent = "Identificando sua localização...";
+    if (!dadosMensais || !dadosMensais.labels || !dadosMensais.valores) {
+        console.error("Dados mensais não encontrados no JSON.");
+        return;
+    }
 
-    navigator.geolocation.getCurrentPosition(
+    if (graficoCustos) {
+        graficoCustos.destroy();
+    }
 
-        function (posicao) {
+    graficoCustos = new Chart(canvas, {
+        type: "line",
 
-            coordenadasOrigem = {
-                latitude: posicao.coords.latitude,
-                longitude: posicao.coords.longitude
-            };
+        data: {
+            labels: dadosMensais.labels,
 
-            origem.value = "Minha localização atual";
-
-            resultado.textContent =
-                "Localização identificada. Informe o destino para calcular a rota.";
-
-            botaoLocalizacao.disabled = false;
+            datasets: [{
+                label: "Custo dos fretes",
+                data: dadosMensais.valores,
+                borderColor: "#2563eb",
+                backgroundColor: "rgba(37, 99, 235, 0.12)",
+                borderWidth: 3,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
         },
 
-        function (erro) {
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
 
-            const mensagens = {
-                1: "Acesso à localização negado. Autorize o GPS no navegador.",
-                2: "Não foi possível identificar sua posição.",
-                3: "O tempo para obter a localização terminou."
-            };
+            plugins: {
+                legend: {
+                    display: true,
+                    position: "top"
+                },
 
-            resultado.textContent =
-                mensagens[erro.code] ||
-                "Não foi possível obter sua localização.";
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return "Custo: " + moeda.format(context.raw);
+                        }
+                    }
+                }
+            },
 
-            botaoLocalizacao.disabled = false;
+            scales: {
+                y: {
+                    beginAtZero: true,
+
+                    ticks: {
+                        callback: function(valor) {
+                            return moeda.format(valor);
+                        }
+                    }
+                },
+
+                x: {
+                    title: {
+                        display: true,
+                        text: "Mês"
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ==========================================
+// 3. LOCALIZAÇÃO DO USUÁRIO
+// ==========================================
+
+async function obterLocalizacao() {
+    const campoOrigem = document.getElementById("origem");
+
+    if (!navigator.geolocation) {
+        campoOrigem.placeholder = "Localização não suportada";
+        return;
+    }
+
+    campoOrigem.placeholder = "Obtendo localização...";
+
+    navigator.geolocation.getCurrentPosition(
+        async function(posicao) {
+            const latitude = posicao.coords.latitude;
+            const longitude = posicao.coords.longitude;
+
+            try {
+                const endereco = await buscarEndereco(latitude, longitude);
+
+                campoOrigem.value = endereco;
+
+            } catch (erro) {
+                campoOrigem.value = `${latitude}, ${longitude}`;
+            }
+        },
+
+        function() {
+            campoOrigem.placeholder = "Digite sua localização";
         },
 
         {
             enableHighAccuracy: true,
-            timeout: 20000,
-            maximumAge: 60000
+            timeout: 10000
         }
     );
 }
 
-botaoLocalizacao.addEventListener("click", obterLocalizacao);
+// ==========================================
+// 4. BUSCAR ENDEREÇO PELO GPS
+// ==========================================
 
-origem.addEventListener("input", function () {
-    coordenadasOrigem = null;
-});
-
-// --------------------------------------------------
-// BUSCA DE ENDEREÇOS
-// --------------------------------------------------
-
-function esperar(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function buscarCoordenadas(endereco) {
-
-    const texto = endereco.trim();
-
-    if (!texto) {
-        throw new Error("Informe um endereço válido.");
-    }
-
-    if (texto === "Minha localização atual" && coordenadasOrigem) {
-        return coordenadasOrigem;
-    }
-
-    const correspondencia = texto.match(
-        /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/
-    );
-
-    if (correspondencia) {
-
-        const latitude = Number(correspondencia[1]);
-        const longitude = Number(correspondencia[2]);
-
-        if (
-            latitude < -90 || latitude > 90 ||
-            longitude < -180 || longitude > 180
-        ) {
-            throw new Error("Coordenadas inválidas.");
-        }
-
-        return { latitude, longitude };
-    }
-
-    const url =
-        "https://nominatim.openstreetmap.org/search" +
-        "?format=jsonv2&limit=1&countrycodes=br&q=" +
-        encodeURIComponent(texto);
+async function buscarEndereco(latitude, longitude) {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`;
 
     const resposta = await fetch(url);
 
     if (!resposta.ok) {
-        throw new Error("Falha ao pesquisar o endereço.");
+        throw new Error("Erro ao buscar endereço.");
+    }
+
+    const dados = await resposta.json();
+
+    return dados.display_name;
+}
+
+// ==========================================
+// 5. TRANSFORMAR ENDEREÇO EM COORDENADAS
+// ==========================================
+
+async function buscarCoordenadas(endereco) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(endereco)}`;
+
+    const resposta = await fetch(url);
+
+    if (!resposta.ok) {
+        throw new Error("Erro ao pesquisar endereço.");
     }
 
     const dados = await resposta.json();
 
     if (!dados.length) {
-        throw new Error("Endereço não encontrado: " + texto);
+        throw new Error("Endereço não encontrado: " + endereco);
     }
 
     return {
-        latitude: Number(dados[0].lat),
-        longitude: Number(dados[0].lon)
+        latitude: parseFloat(dados[0].lat),
+        longitude: parseFloat(dados[0].lon)
     };
 }
 
-// --------------------------------------------------
-// CÁLCULO DA DISTÂNCIA RODOVIÁRIA
-// --------------------------------------------------
+// ==========================================
+// 6. CALCULAR DISTÂNCIA PELA ROTA
+// ==========================================
 
-async function calcularDistancia(pontoA, pontoB) {
+async function calcularDistancia(origem, destino) {
+    const pontoOrigem = await buscarCoordenadas(origem);
+    const pontoDestino = await buscarCoordenadas(destino);
 
-    const url =
-        `https://router.project-osrm.org/route/v1/driving/` +
-        `${pontoA.longitude},${pontoA.latitude};` +
-        `${pontoB.longitude},${pontoB.latitude}` +
-        "?overview=false";
+    const url = `https://router.project-osrm.org/route/v1/driving/${pontoOrigem.longitude},${pontoOrigem.latitude};${pontoDestino.longitude},${pontoDestino.latitude}?overview=false`;
 
     const resposta = await fetch(url);
 
     if (!resposta.ok) {
-        throw new Error("Não foi possível consultar a rota.");
+        throw new Error("Erro ao calcular a rota.");
     }
 
     const dados = await resposta.json();
 
-    if (dados.code !== "Ok" || !dados.routes.length) {
-        throw new Error("Não existe uma rota disponível entre os locais.");
+    if (!dados.routes || !dados.routes.length) {
+        throw new Error("Não foi possível encontrar uma rota.");
     }
 
     return {
@@ -216,158 +245,155 @@ async function calcularDistancia(pontoA, pontoB) {
     };
 }
 
-// --------------------------------------------------
-// EXIBIÇÃO DO RESULTADO
-// --------------------------------------------------
+// ==========================================
+// 7. EXIBIR RESULTADO DA SIMULAÇÃO
+// ==========================================
 
-function apresentarResultado(dados) {
+function exibirResultado(resultado) {
+    const area = document.getElementById("resultadoSimulacao");
 
-    resultado.innerHTML = `
+    area.innerHTML = `
         <h3>Resultado da simulação</h3>
 
-        <p>Veículo: ${dados.veiculo}</p>
+        <p><strong>Veículo:</strong> ${resultado.veiculo}</p>
 
-        <p>Distância de ida:
-        ${numero.format(dados.distanciaIda)} km</p>
+        <p><strong>Distância total:</strong>
+            ${resultado.distancia.toFixed(1)} km
+        </p>
 
-        <p>Distância de retorno:
-        ${numero.format(dados.distanciaRetorno)} km</p>
+        <p><strong>Tempo estimado:</strong>
+            ${resultado.tempo.toFixed(1)} horas
+        </p>
 
-        <p><strong>Distância total:
-        ${numero.format(dados.distanciaTotal)} km</strong></p>
+        <p><strong>Consumo estimado:</strong>
+            ${resultado.litros.toFixed(2)} litros
+        </p>
 
-        <p>Tempo estimado de condução:
-        ${numero.format(dados.duracaoTotal)} horas</p>
+        <p><strong>Preço do diesel:</strong>
+            ${moeda.format(resultado.precoDiesel)}
+        </p>
 
-        <p>Consumo médio:
-        ${numero.format(dados.consumo)} km/L</p>
-
-        <p>Combustível necessário:
-        ${numero.format(dados.litros)} litros</p>
-
-        <p>Preço do diesel:
-        ${moeda.format(dados.diesel)}</p>
-
-        <h3>Custo estimado:
-        ${moeda.format(dados.custo)}</h3>
+        <p><strong>Custo estimado:</strong>
+            ${moeda.format(resultado.custo)}
+        </p>
     `;
 }
 
-// --------------------------------------------------
-// SIMULAÇÃO COMPLETA
-// --------------------------------------------------
+// ==========================================
+// 8. CALCULAR SIMULAÇÃO
+// ==========================================
 
-botaoCalcular.addEventListener("click", async function () {
+async function calcularSimulacao() {
+    const origem = document.getElementById("origem").value.trim();
+    const destino = document.getElementById("destino").value.trim();
+
+    const tipoPercurso = document.getElementById("tipoPercurso").value;
+    const destinoRetorno = document.getElementById("destinoRetorno").value.trim();
+
+    const veiculo = document.getElementById("veiculo").value;
+
+    const consumo = parseFloat(document.getElementById("consumo").value);
+    const diesel = parseFloat(document.getElementById("diesel").value);
+
+    const area = document.getElementById("resultadoSimulacao");
+    const botao = document.getElementById("calcularSimulacao");
+
+    // Validação dos campos
+    if (!origem || !destino) {
+        alert("Informe o local de partida e o destino.");
+        return;
+    }
+
+    if (tipoPercurso === "personalizado" && !destinoRetorno) {
+        alert("Informe o destino do retorno.");
+        return;
+    }
+
+    if (!consumo || consumo <= 0 || !diesel || diesel <= 0) {
+        alert("Informe valores válidos para consumo e preço do diesel.");
+        return;
+    }
+
+    botao.disabled = true;
+    botao.textContent = "Calculando rota...";
+
+    area.textContent = "Consultando os endereços e calculando a distância...";
 
     try {
+        // Calcula a ida
+        const ida = await calcularDistancia(origem, destino);
 
-        const consumo = Number(
-            document.getElementById("consumo").value
-        );
+        let distanciaTotal = ida.distancia;
+        let tempoTotal = ida.duracao;
 
-        const diesel = Number(
-            document.getElementById("diesel").value
-        );
-
-        const veiculo =
-            document.getElementById("veiculo").selectedOptions[0].textContent;
-
-        if (!origem.value.trim() || !destino.value.trim()) {
-            throw new Error("Informe a origem e o destino.");
+        // Ida e volta: retorna ao local de origem
+        if (tipoPercurso === "ida_volta") {
+            distanciaTotal += ida.distancia;
+            tempoTotal += ida.duracao;
         }
 
-        if (
-            !Number.isFinite(consumo) ||
-            !Number.isFinite(diesel) ||
-            consumo <= 0 ||
-            diesel <= 0
-        ) {
-            throw new Error("Informe consumo e preço do diesel válidos.");
-        }
-
-        if (
-            tipoPercurso.value === "personalizado" &&
-            !destinoRetorno.value.trim()
-        ) {
-            throw new Error("Informe o destino do retorno.");
-        }
-
-        botaoCalcular.disabled = true;
-        resultado.textContent = "Consultando endereços e calculando rota...";
-
-        const pontoOrigem = await buscarCoordenadas(origem.value);
-
-        await esperar(1100);
-
-        const pontoDestino = await buscarCoordenadas(destino.value);
-
-        const ida = await calcularDistancia(
-            pontoOrigem,
-            pontoDestino
-        );
-
-        let distanciaRetorno = 0;
-        let duracaoRetorno = 0;
-
-        if (tipoPercurso.value === "ida_volta") {
-
-            const volta = await calcularDistancia(
-                pontoDestino,
-                pontoOrigem
+        // Retorno personalizado: destino até outro endereço
+        if (tipoPercurso === "personalizado") {
+            const retorno = await calcularDistancia(
+                destino,
+                destinoRetorno
             );
 
-            distanciaRetorno = volta.distancia;
-            duracaoRetorno = volta.duracao;
+            distanciaTotal += retorno.distancia;
+            tempoTotal += retorno.duracao;
         }
 
-        if (tipoPercurso.value === "personalizado") {
-
-            await esperar(1100);
-
-            const pontoRetorno = await buscarCoordenadas(
-                destinoRetorno.value
-            );
-
-            const volta = await calcularDistancia(
-                pontoDestino,
-                pontoRetorno
-            );
-
-            distanciaRetorno = volta.distancia;
-            duracaoRetorno = volta.duracao;
-        }
-
-        const distanciaTotal = ida.distancia + distanciaRetorno;
-        const duracaoTotal = ida.duracao + duracaoRetorno;
-
+        // Cálculo de combustível e custo
         const litros = distanciaTotal / consumo;
         const custo = litros * diesel;
 
-        apresentarResultado({
-            veiculo,
-            distanciaIda: ida.distancia,
-            distanciaRetorno,
-            distanciaTotal,
-            duracaoTotal,
-            consumo,
-            diesel,
-            litros,
-            custo
+        exibirResultado({
+            veiculo: veiculo,
+            distancia: distanciaTotal,
+            tempo: tempoTotal,
+            litros: litros,
+            precoDiesel: diesel,
+            custo: custo
         });
 
     } catch (erro) {
+        console.error(erro);
 
-        resultado.textContent = erro.message;
+        area.textContent =
+            "Não foi possível calcular a rota. Verifique os endereços e tente novamente.";
+    }
 
-    } finally {
+    botao.disabled = false;
+    botao.textContent = "Calcular custo da viagem";
+}
 
-        botaoCalcular.disabled = false;
+// ==========================================
+// 9. CONTROLES DO SIMULADOR
+// ==========================================
+
+document.getElementById("usarLocalizacao").addEventListener("click", function() {
+    obterLocalizacao();
+});
+
+document.getElementById("calcularSimulacao").addEventListener("click", function() {
+    calcularSimulacao();
+});
+
+document.getElementById("tipoPercurso").addEventListener("change", function() {
+    const campoRetorno = document.getElementById("campoRetorno");
+
+    if (this.value === "personalizado") {
+        campoRetorno.style.display = "block";
+    } else {
+        campoRetorno.style.display = "none";
     }
 });
 
-// --------------------------------------------------
-// INICIAR
-// --------------------------------------------------
+// ==========================================
+// 10. INICIALIZAÇÃO
+// ==========================================
 
-carregarDadosPython();
-obterLocalizacao();
+document.addEventListener("DOMContentLoaded", function() {
+    carregarDadosPython();
+    obterLocalizacao();
+});
