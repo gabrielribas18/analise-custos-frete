@@ -1,7 +1,7 @@
 
 // ==========================================
 // FREIGHT ANALYTICS | AGRÁRIA
-// Integração Python + Dashboard + IA + Simulador
+// Dashboard + Inteligência Artificial + Simulador
 // ==========================================
 
 const moeda = new Intl.NumberFormat("pt-BR", {
@@ -17,90 +17,6 @@ let graficoCustos = null;
 let graficoLSTM = null;
 
 // ==========================================
-// CRIAR ÁREA DE DIESEL E INTELIGÊNCIA
-// ==========================================
-
-function adicionarAreaInteligencia() {
-    const dashboard = document.getElementById("dashboard");
-    const simulacao = document.getElementById("simulacao");
-
-    if (!dashboard || !simulacao) return;
-
-    const cards = dashboard.querySelector(".cards");
-
-    if (cards && !document.getElementById("precoDieselMedio")) {
-        const cardDiesel = document.createElement("article");
-        cardDiesel.className = "card";
-        cardDiesel.innerHTML = `
-            <span>Diesel S10 médio - Paraná</span>
-            <h3 id="precoDieselMedio">Carregando...</h3>
-            <small id="dataDiesel">Referência de preço informada no arquivo de dados</small>
-        `;
-        cards.appendChild(cardDiesel);
-    }
-
-    const menu = document.querySelector(".sidebar nav");
-
-    if (menu && !menu.querySelector('a[href="#areaInteligencia"]')) {
-        const link = document.createElement("a");
-        link.href = "#areaInteligencia";
-        link.textContent = "Inteligência Artificial";
-        menu.appendChild(link);
-    }
-
-    if (!document.getElementById("areaInteligencia")) {
-        const secao = document.createElement("section");
-        secao.id = "areaInteligencia";
-
-        secao.innerHTML = `
-            <div class="section-heading">
-                <h2>Inteligência Artificial</h2>
-                <p>Resultados do modelo LSTM aplicado aos custos de frete</p>
-            </div>
-
-            <div class="cards">
-                <article class="card">
-                    <span>Erro absoluto médio (MAE)</span>
-                    <h3 id="lstmMAE">Aguardando dados...</h3>
-                    <small>Erro médio das previsões</small>
-                </article>
-
-                <article class="card">
-                    <span>Raiz do erro quadrático (RMSE)</span>
-                    <h3 id="lstmRMSE">Aguardando dados...</h3>
-                    <small>Penaliza erros maiores</small>
-                </article>
-
-                <article class="card">
-                    <span>R² do modelo</span>
-                    <h3 id="lstmR2">Aguardando dados...</h3>
-                    <small>Coeficiente de determinação</small>
-                </article>
-
-                <article class="card">
-                    <span>Total de previsões avaliadas</span>
-                    <h3 id="totalPrevisoes">Aguardando dados...</h3>
-                    <small>Registros do conjunto de teste</small>
-                </article>
-            </div>
-
-            <div class="panel">
-                <h3>Valores reais x valores previstos</h3>
-                <div class="chart-placeholder">
-                    <canvas id="graficoLSTM"></canvas>
-                </div>
-                <small>
-                    Gráfico de amostra das previsões do conjunto de teste.
-                    Não representa uma previsão garantida de fretes futuros.
-                </small>
-            </div>
-        `;
-
-        simulacao.parentNode.insertBefore(secao, simulacao);
-    }
-}
-
-// ==========================================
 // 1. CARREGAR DADOS DO PYTHON
 // ==========================================
 
@@ -111,86 +27,91 @@ async function carregarDadosPython() {
         });
 
         if (!resposta.ok) {
-            throw new Error("Não foi possível carregar dados.json");
+            throw new Error("Não foi possível carregar o arquivo dados.json.");
         }
 
         const dados = await resposta.json();
 
-        document.getElementById("totalFretes").textContent =
-            numero.format(dados.totalFretes ?? 0);
+        // Indicadores do dashboard
+        atualizarTexto("totalFretes", numero.format(dados.totalFretes ?? 0));
+        atualizarTexto("custoTotal", moeda.format(dados.custoTotal ?? 0));
+        atualizarTexto("custoMedio", moeda.format(dados.custoMedio ?? 0));
 
-        document.getElementById("custoTotal").textContent =
-            moeda.format(dados.custoTotal ?? 0);
-
-        document.getElementById("custoMedio").textContent =
-            moeda.format(dados.custoMedio ?? 0);
-
+        // Gráfico de custos mensais
         criarGraficoCustos(dados.custosMensais);
 
+        // Indicadores do diesel
         if (dados.diesel) {
-            const precoDiesel = document.getElementById("precoDieselMedio");
-            const dataDiesel = document.getElementById("dataDiesel");
+            atualizarTexto(
+                "precoDieselMedio",
+                moeda.format(dados.diesel.precoMedio)
+            );
+
+            atualizarTexto(
+                "dataDiesel",
+                `${dados.diesel.estado} | ${dados.diesel.periodo} | ${dados.diesel.fonte}`
+            );
+
             const campoDiesel = document.getElementById("diesel");
-
-            if (precoDiesel) {
-                precoDiesel.textContent = moeda.format(dados.diesel.precoMedio);
-            }
-
-            if (dataDiesel) {
-                dataDiesel.textContent =
-                    `${dados.diesel.estado} | ${dados.diesel.periodo} | ${dados.diesel.fonte}`;
-            }
 
             if (campoDiesel && !campoDiesel.value) {
                 campoDiesel.value = dados.diesel.precoMedio;
             }
         }
 
+        // Indicadores e gráfico da inteligência artificial
         if (dados.lstm) {
             const modelo = dados.lstm;
 
-            const mae = document.getElementById("lstmMAE");
-            const rmse = document.getElementById("lstmRMSE");
-            const r2 = document.getElementById("lstmR2");
-            const total = document.getElementById("totalPrevisoes");
+            atualizarTexto("lstmMAE", moeda.format(modelo.mae));
+            atualizarTexto("lstmRMSE", moeda.format(modelo.rmse));
+            atualizarTexto("lstmR2", Number(modelo.r2).toFixed(4));
 
-            if (mae) mae.textContent = moeda.format(modelo.mae);
-            if (rmse) rmse.textContent = moeda.format(modelo.rmse);
-            if (r2) r2.textContent = Number(modelo.r2).toFixed(4);
-
-            if (total) {
-                total.textContent = numero.format(modelo.quantidadePrevisoes);
-            }
+            atualizarTexto(
+                "totalPrevisoes",
+                numero.format(modelo.quantidadePrevisoes)
+            );
 
             criarGraficoLSTM(modelo.previsoes);
         }
 
-        console.log("Dados carregados com sucesso:", dados);
+        console.log("Dados do Python carregados com sucesso.");
 
     } catch (erro) {
         console.error("Erro ao carregar dados:", erro);
 
-        document.getElementById("totalFretes").textContent = "Indisponível";
-        document.getElementById("custoTotal").textContent = "Indisponível";
-        document.getElementById("custoMedio").textContent = "Indisponível";
-
-        const precoDiesel = document.getElementById("precoDieselMedio");
-
-        if (precoDiesel) {
-            precoDiesel.textContent = "Indisponível";
-        }
+        atualizarTexto("totalFretes", "Erro ao carregar");
+        atualizarTexto("custoTotal", "Erro ao carregar");
+        atualizarTexto("custoMedio", "Erro ao carregar");
+        atualizarTexto("precoDieselMedio", "Erro ao carregar");
+        atualizarTexto("lstmMAE", "Erro ao carregar");
+        atualizarTexto("lstmRMSE", "Erro ao carregar");
+        atualizarTexto("lstmR2", "Erro ao carregar");
+        atualizarTexto("totalPrevisoes", "Erro ao carregar");
     }
 }
 
 // ==========================================
-// 2. GRÁFICO DE CUSTOS MENSAIS
+// 2. ATUALIZAR TEXTO DOS ELEMENTOS
+// ==========================================
+
+function atualizarTexto(id, valor) {
+    const elemento = document.getElementById(id);
+
+    if (elemento) {
+        elemento.textContent = valor;
+    }
+}
+
+// ==========================================
+// 3. GRÁFICO DE CUSTOS MENSAIS
 // ==========================================
 
 function criarGraficoCustos(dadosMensais) {
     const canvas = document.getElementById("graficoCustosChart");
 
     if (!canvas || typeof Chart === "undefined") {
-        console.error("Canvas ou Chart.js não encontrados.");
+        console.error("Gráfico de custos ou Chart.js não encontrado.");
         return;
     }
 
@@ -199,7 +120,7 @@ function criarGraficoCustos(dadosMensais) {
         !Array.isArray(dadosMensais.labels) ||
         !Array.isArray(dadosMensais.valores)
     ) {
-        console.error("Dados mensais não encontrados no JSON.");
+        console.error("Estrutura dos custos mensais inválida.");
         return;
     }
 
@@ -209,41 +130,54 @@ function criarGraficoCustos(dadosMensais) {
 
     graficoCustos = new Chart(canvas, {
         type: "line",
+
         data: {
             labels: dadosMensais.labels,
+
             datasets: [{
                 label: "Custo dos fretes",
+
                 data: dadosMensais.valores,
+
                 borderColor: "#2563eb",
                 backgroundColor: "rgba(37, 99, 235, 0.12)",
+
                 borderWidth: 3,
                 fill: true,
                 tension: 0.3,
                 pointRadius: 3
             }]
         },
+
         options: {
             responsive: true,
             maintainAspectRatio: false,
+
             plugins: {
                 legend: {
-                    display: true,
                     position: "top"
                 },
+
                 tooltip: {
                     callbacks: {
-                        label: context =>
-                            "Custo: " + moeda.format(context.raw)
+                        label: function(context) {
+                            return "Custo: " + moeda.format(context.raw);
+                        }
                     }
                 }
             },
+
             scales: {
                 y: {
                     beginAtZero: true,
+
                     ticks: {
-                        callback: valor => moeda.format(valor)
+                        callback: function(valor) {
+                            return moeda.format(valor);
+                        }
                     }
                 },
+
                 x: {
                     title: {
                         display: true,
@@ -256,77 +190,136 @@ function criarGraficoCustos(dadosMensais) {
 }
 
 // ==========================================
-// 3. GRÁFICO DE PREVISÕES LSTM
+// 4. GRÁFICO DA INTELIGÊNCIA ARTIFICIAL
+// VALORES REAIS X VALORES PREVISTOS
 // ==========================================
 
 function criarGraficoLSTM(previsoes) {
     const canvas = document.getElementById("graficoLSTM");
 
     if (!canvas || typeof Chart === "undefined") {
-        console.error("Canvas ou Chart.js não encontrados para a LSTM.");
+        console.error("Gráfico LSTM ou Chart.js não encontrado.");
         return;
     }
 
     if (!Array.isArray(previsoes) || previsoes.length === 0) {
-        console.error("Não existem previsões da LSTM no JSON.");
+        console.error("Nenhuma previsão encontrada no dados.json.");
         return;
     }
 
+    // Organiza os dados recebidos do Python
+    const dadosValidos = previsoes.filter(item => {
+        return (
+            item &&
+            Number.isFinite(Number(item.real)) &&
+            Number.isFinite(Number(item.previsto))
+        );
+    });
+
+    if (dadosValidos.length === 0) {
+        console.error(
+            "Não foram encontrados valores reais e previstos válidos."
+        );
+        return;
+    }
+
+    const labels = dadosValidos.map((item, index) => {
+        return item.data || `Registro ${index + 1}`;
+    });
+
+    const valoresReais = dadosValidos.map(item => Number(item.real));
+
+    const valoresPrevistos = dadosValidos.map(item => Number(item.previsto));
+
+    // Impede a criação de gráficos duplicados
     if (graficoLSTM) {
         graficoLSTM.destroy();
+        graficoLSTM = null;
     }
 
     graficoLSTM = new Chart(canvas, {
         type: "line",
+
         data: {
-            labels: previsoes.map((item, index) =>
-                item.data || "Registro " + (index + 1)
-            ),
+            labels: labels,
+
             datasets: [
                 {
-                    label: "Valor real",
-                    data: previsoes.map(item => item.real),
+                    label: "Valores reais",
+
+                    data: valoresReais,
+
                     borderColor: "#2563eb",
+                    backgroundColor: "rgba(37, 99, 235, 0.10)",
+
                     borderWidth: 2,
                     pointRadius: 0,
                     tension: 0.2
                 },
+
                 {
-                    label: "Valor previsto (LSTM)",
-                    data: previsoes.map(item => item.previsto),
+                    label: "Valores previstos (LSTM)",
+
+                    data: valoresPrevistos,
+
                     borderColor: "#e58a26",
+                    backgroundColor: "rgba(229, 138, 38, 0.10)",
+
                     borderWidth: 2,
                     pointRadius: 0,
                     tension: 0.2
                 }
             ]
         },
+
         options: {
             responsive: true,
             maintainAspectRatio: false,
+
             interaction: {
                 mode: "index",
                 intersect: false
             },
+
             plugins: {
                 legend: {
+                    display: true,
                     position: "top"
                 },
+
                 tooltip: {
                     callbacks: {
-                        label: context =>
-                            context.dataset.label + ": " +
-                            moeda.format(context.raw)
+                        label: function(context) {
+                            return (
+                                context.dataset.label +
+                                ": " +
+                                moeda.format(context.raw)
+                            );
+                        }
                     }
                 }
             },
+
             scales: {
                 y: {
+                    title: {
+                        display: true,
+                        text: "Custo do frete (R$)"
+                    },
+
                     ticks: {
-                        callback: valor => moeda.format(valor)
+                        callback: function(valor) {
+                            return moeda.format(valor);
+                        }
                     }
                 },
+
                 x: {
+                    title: {
+                        display: true,
+                        text: "Registros analisados"
+                    },
+
                     ticks: {
                         maxTicksLimit: 10
                     }
@@ -334,17 +327,21 @@ function criarGraficoLSTM(previsoes) {
             }
         }
     });
+
+    console.log(
+        `Gráfico LSTM criado com ${dadosValidos.length} registros.`
+    );
 }
 
 // ==========================================
-// 4. LOCALIZAÇÃO DO USUÁRIO
+// 5. OBTER LOCALIZAÇÃO
 // ==========================================
 
-async function obterLocalizacao() {
+function obterLocalizacao() {
     const campoOrigem = document.getElementById("origem");
 
     if (!navigator.geolocation) {
-        campoOrigem.placeholder = "Localização não suportada";
+        alert("Seu navegador não suporta localização.");
         return;
     }
 
@@ -356,15 +353,23 @@ async function obterLocalizacao() {
             const longitude = posicao.coords.longitude;
 
             try {
-                const endereco = await buscarEndereco(latitude, longitude);
+                const endereco = await buscarEndereco(
+                    latitude,
+                    longitude
+                );
+
                 campoOrigem.value = endereco;
+
             } catch (erro) {
                 campoOrigem.value = `${latitude}, ${longitude}`;
             }
         },
+
         function() {
             campoOrigem.placeholder = "Digite sua localização";
+            alert("Não foi possível obter sua localização.");
         },
+
         {
             enableHighAccuracy: true,
             timeout: 10000
@@ -373,7 +378,7 @@ async function obterLocalizacao() {
 }
 
 // ==========================================
-// 5. BUSCAR ENDEREÇO PELO GPS
+// 6. CONVERTER COORDENADAS EM ENDEREÇO
 // ==========================================
 
 async function buscarEndereco(latitude, longitude) {
@@ -392,7 +397,7 @@ async function buscarEndereco(latitude, longitude) {
 }
 
 // ==========================================
-// 6. TRANSFORMAR ENDEREÇO EM COORDENADAS
+// 7. CONVERTER ENDEREÇO EM COORDENADAS
 // ==========================================
 
 async function buscarCoordenadas(endereco) {
@@ -418,7 +423,7 @@ async function buscarCoordenadas(endereco) {
 }
 
 // ==========================================
-// 7. CALCULAR DISTÂNCIA PELA ROTA
+// 8. CALCULAR DISTÂNCIA DA ROTA
 // ==========================================
 
 async function calcularDistancia(origem, destino) {
@@ -447,7 +452,7 @@ async function calcularDistancia(origem, destino) {
 }
 
 // ==========================================
-// 8. EXIBIR RESULTADO DA SIMULAÇÃO
+// 9. EXIBIR RESULTADO DA SIMULAÇÃO
 // ==========================================
 
 function exibirResultado(resultado) {
@@ -455,34 +460,54 @@ function exibirResultado(resultado) {
 
     area.innerHTML = `
         <h3>Resultado da simulação</h3>
+
         <p><strong>Veículo:</strong> ${resultado.veiculo}</p>
-        <p><strong>Distância total:</strong> ${resultado.distancia.toFixed(1)} km</p>
-        <p><strong>Tempo estimado:</strong> ${resultado.tempo.toFixed(1)} horas</p>
-        <p><strong>Consumo estimado:</strong> ${resultado.litros.toFixed(2)} litros</p>
-        <p><strong>Preço do diesel:</strong> ${moeda.format(resultado.precoDiesel)}</p>
-        <p><strong>Custo estimado:</strong> ${moeda.format(resultado.custo)}</p>
+
+        <p><strong>Distância total:</strong>
+        ${resultado.distancia.toFixed(1)} km</p>
+
+        <p><strong>Tempo estimado:</strong>
+        ${resultado.tempo.toFixed(1)} horas</p>
+
+        <p><strong>Consumo estimado:</strong>
+        ${resultado.litros.toFixed(2)} litros</p>
+
+        <p><strong>Preço do diesel:</strong>
+        ${moeda.format(resultado.precoDiesel)}</p>
+
+        <p><strong>Custo estimado:</strong>
+        ${moeda.format(resultado.custo)}</p>
     `;
 }
 
 // ==========================================
-// 9. CALCULAR SIMULAÇÃO
+// 10. CALCULAR SIMULAÇÃO
 // ==========================================
 
 async function calcularSimulacao() {
     const origem = document.getElementById("origem").value.trim();
     const destino = document.getElementById("destino").value.trim();
 
-    const tipoPercurso = document.getElementById("tipoPercurso").value;
+    const tipoPercurso =
+        document.getElementById("tipoPercurso").value;
+
     const destinoRetorno =
         document.getElementById("destinoRetorno").value.trim();
 
-    const veiculo = document.getElementById("veiculo").value;
+    const veiculo =
+        document.getElementById("veiculo").value;
 
-    const consumo = parseFloat(document.getElementById("consumo").value);
-    const diesel = parseFloat(document.getElementById("diesel").value);
+    const consumo =
+        parseFloat(document.getElementById("consumo").value);
 
-    const area = document.getElementById("resultadoSimulacao");
-    const botao = document.getElementById("calcularSimulacao");
+    const diesel =
+        parseFloat(document.getElementById("diesel").value);
+
+    const area =
+        document.getElementById("resultadoSimulacao");
+
+    const botao =
+        document.getElementById("calcularSimulacao");
 
     if (!origem || !destino) {
         alert("Informe o local de partida e o destino.");
@@ -494,14 +519,21 @@ async function calcularSimulacao() {
         return;
     }
 
-    if (!consumo || consumo <= 0 || !diesel || diesel <= 0) {
+    if (
+        !Number.isFinite(consumo) ||
+        consumo <= 0 ||
+        !Number.isFinite(diesel) ||
+        diesel <= 0
+    ) {
         alert("Informe valores válidos para consumo e preço do diesel.");
         return;
     }
 
     botao.disabled = true;
     botao.textContent = "Calculando rota...";
-    area.textContent = "Consultando endereços e calculando a distância...";
+
+    area.textContent =
+        "Consultando endereços e calculando a distância...";
 
     try {
         const ida = await calcularDistancia(origem, destino);
@@ -528,12 +560,12 @@ async function calcularSimulacao() {
         const custo = litros * diesel;
 
         exibirResultado({
-            veiculo,
+            veiculo: veiculo,
             distancia: distanciaTotal,
             tempo: tempoTotal,
-            litros,
+            litros: litros,
             precoDiesel: diesel,
-            custo
+            custo: custo
         });
 
     } catch (erro) {
@@ -549,39 +581,54 @@ async function calcularSimulacao() {
 }
 
 // ==========================================
-// 10. INICIALIZAÇÃO DOS CONTROLES
+// 11. INICIALIZAÇÃO
 // ==========================================
 
 document.addEventListener("DOMContentLoaded", function() {
 
-    adicionarAreaInteligencia();
-
+    // Carrega os dados sem criar novas seções no HTML
     carregarDadosPython();
 
-    const botaoLocalizacao = document.getElementById("usarLocalizacao");
+    // Botão de localização
+    const botaoLocalizacao =
+        document.getElementById("usarLocalizacao");
 
     if (botaoLocalizacao) {
-        botaoLocalizacao.addEventListener("click", obterLocalizacao);
+        botaoLocalizacao.addEventListener(
+            "click",
+            obterLocalizacao
+        );
     }
 
-    const botaoSimulacao = document.getElementById("calcularSimulacao");
+    // Botão de simulação
+    const botaoSimulacao =
+        document.getElementById("calcularSimulacao");
 
     if (botaoSimulacao) {
-        botaoSimulacao.addEventListener("click", calcularSimulacao);
+        botaoSimulacao.addEventListener(
+            "click",
+            calcularSimulacao
+        );
     }
 
-    const tipoPercurso = document.getElementById("tipoPercurso");
+    // Campo de retorno personalizado
+    const tipoPercurso =
+        document.getElementById("tipoPercurso");
 
     if (tipoPercurso) {
         tipoPercurso.addEventListener("change", function() {
-            const campoRetorno = document.getElementById("campoRetorno");
+
+            const campoRetorno =
+                document.getElementById("campoRetorno");
 
             if (campoRetorno) {
                 campoRetorno.style.display =
-                    this.value === "personalizado" ? "block" : "none";
+                    this.value === "personalizado"
+                        ? "block"
+                        : "none";
             }
         });
     }
 
-    obterLocalizacao();
+    console.log("Freight Analytics iniciado.");
 });
