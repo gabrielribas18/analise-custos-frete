@@ -21,6 +21,40 @@ const numero = new Intl.NumberFormat("pt-BR", {
 });
 
 // --------------------------------------------------
+// CONEXÃO COM OS DADOS DO PYTHON
+// --------------------------------------------------
+
+async function carregarDadosPython() {
+
+    try {
+
+        const resposta = await fetch("./dados.json?v=" + Date.now());
+
+        if (!resposta.ok) {
+            throw new Error("Não foi possível carregar os dados.");
+        }
+
+        const dados = await resposta.json();
+
+        document.getElementById("totalFretes").textContent =
+            numero.format(dados.totalFretes);
+
+        document.getElementById("custoTotal").textContent =
+            moeda.format(dados.custoTotal);
+
+        document.getElementById("custoMedio").textContent =
+            moeda.format(dados.custoMedio);
+
+        console.log("Dados do Python carregados:", dados);
+
+    } catch (erro) {
+
+        console.error("Erro ao carregar dados do Python:", erro);
+
+    }
+}
+
+// --------------------------------------------------
 // OPÇÕES DE PERCURSO
 // --------------------------------------------------
 
@@ -86,7 +120,6 @@ function obterLocalizacao() {
 
 botaoLocalizacao.addEventListener("click", obterLocalizacao);
 
-// Se o usuário editar a origem, usar o endereço digitado
 origem.addEventListener("input", function () {
     coordenadasOrigem = null;
 });
@@ -107,12 +140,10 @@ async function buscarCoordenadas(endereco) {
         throw new Error("Informe um endereço válido.");
     }
 
-    // Se já temos as coordenadas do GPS, utilizá-las
     if (texto === "Minha localização atual" && coordenadasOrigem) {
         return coordenadasOrigem;
     }
 
-    // Permitir coordenadas digitadas manualmente
     const correspondencia = texto.match(
         /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/
     );
@@ -264,14 +295,12 @@ botaoCalcular.addEventListener("click", async function () {
         botaoCalcular.disabled = true;
         resultado.textContent = "Consultando endereços e calculando rota...";
 
-        // Identificar origem e destino
         const pontoOrigem = await buscarCoordenadas(origem.value);
 
         await esperar(1100);
 
         const pontoDestino = await buscarCoordenadas(destino.value);
 
-        // Calcular ida
         const ida = await calcularDistancia(
             pontoOrigem,
             pontoDestino
@@ -280,7 +309,6 @@ botaoCalcular.addEventListener("click", async function () {
         let distanciaRetorno = 0;
         let duracaoRetorno = 0;
 
-        // Ida e volta
         if (tipoPercurso.value === "ida_volta") {
 
             const volta = await calcularDistancia(
@@ -292,7 +320,6 @@ botaoCalcular.addEventListener("click", async function () {
             duracaoRetorno = volta.duracao;
         }
 
-        // Retorno personalizado
         if (tipoPercurso.value === "personalizado") {
 
             await esperar(1100);
@@ -310,7 +337,6 @@ botaoCalcular.addEventListener("click", async function () {
             duracaoRetorno = volta.duracao;
         }
 
-        // Calcular custos
         const distanciaTotal = ida.distancia + distanciaRetorno;
         const duracaoTotal = ida.duracao + duracaoRetorno;
 
@@ -343,4 +369,5 @@ botaoCalcular.addEventListener("click", async function () {
 // INICIAR
 // --------------------------------------------------
 
+carregarDadosPython();
 obterLocalizacao();
