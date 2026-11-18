@@ -4,14 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Freight Analytics | Agrária</title>
 
-    <link rel="stylesheet" href="src/style.css?v=4">
+    <link rel="stylesheet" href="src/style.css?v=5">
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
+
+    <!-- MENU LATERAL -->
     <aside class="sidebar">
+
         <div class="logo">
             <h2>FREIGHT<span>ANALYTICS</span></h2>
             <small>AGRÁRIA</small>
@@ -23,25 +28,34 @@
             <a href="#inteligencia">Inteligência Artificial</a>
             <a href="#simulacao">Simulações</a>
         </nav>
+
     </aside>
 
+    <!-- CONTEÚDO PRINCIPAL -->
     <main class="main-content">
+
+        <!-- CABEÇALHO -->
         <header class="topbar">
+
             <div>
                 <h1>Freight Analytics</h1>
                 <p>Plataforma de análise e planejamento de custos de transporte</p>
             </div>
+
             <span class="status">AMBIENTE DE TESTES</span>
+
         </header>
 
         <!-- DASHBOARD -->
         <section id="dashboard">
+
             <div class="section-heading">
                 <h2>Indicadores principais</h2>
                 <p>Visão geral dos custos de transporte</p>
             </div>
 
             <div class="cards">
+
                 <article class="card">
                     <span>Total de fretes</span>
                     <h3 id="totalFretes">Carregando...</h3>
@@ -65,32 +79,41 @@
                     <h3 id="precoDieselMedio">Carregando...</h3>
                     <small id="dataDiesel">Fonte: ANP</small>
                 </article>
+
             </div>
+
         </section>
 
         <!-- ANÁLISE DE FRETES -->
         <section id="analises">
+
             <div class="section-heading">
                 <h2>Análise de custos</h2>
                 <p>Visualização dos indicadores de transporte</p>
             </div>
 
             <div class="panel">
+
                 <h3>Evolução dos custos</h3>
-                <div id="graficoCustos" class="chart-placeholder">
+
+                <div class="chart-placeholder">
                     <canvas id="graficoCustosChart"></canvas>
                 </div>
+
             </div>
+
         </section>
 
         <!-- INTELIGÊNCIA ARTIFICIAL -->
         <section id="inteligencia">
+
             <div class="section-heading">
                 <h2>Inteligência Artificial</h2>
                 <p>Resultados do modelo de previsão LSTM</p>
             </div>
 
             <div class="cards">
+
                 <article class="card">
                     <span>MAE</span>
                     <h3 id="lstmMAE">Carregando...</h3>
@@ -114,34 +137,49 @@
                     <h3 id="totalPrevisoes">Carregando...</h3>
                     <small>Registros do conjunto de teste</small>
                 </article>
+
             </div>
 
-            <div class="panel" style="margin-top: 20px;">
+            <div class="panel">
+
                 <h3>Valores reais x valores previstos</h3>
-                <div style="height: 350px; position: relative;">
+
+                <div class="chart-placeholder">
                     <canvas id="graficoLSTM"></canvas>
                 </div>
+
                 <p style="margin-top: 15px; color: #64748b; font-size: 13px;">
                     Comparação histórica entre os valores reais e as previsões
                     geradas pelo modelo LSTM.
                 </p>
+
             </div>
+
         </section>
 
         <!-- SIMULADOR -->
         <section id="simulacao">
+
             <div class="section-heading">
                 <h2>Planejamento de transporte</h2>
                 <p>Simulação de rotas e estimativa de custos operacionais</p>
             </div>
 
             <div class="panel">
+
                 <h3>Dados da viagem</h3>
 
                 <div class="simulation-grid">
+
                     <div>
                         <label for="origem">Local de partida</label>
-                        <input type="text" id="origem" placeholder="Obtendo localização...">
+
+                        <input
+                            type="text"
+                            id="origem"
+                            placeholder="Digite o local de partida"
+                        >
+
                         <button type="button" id="usarLocalizacao">
                             Usar minha localização
                         </button>
@@ -149,11 +187,17 @@
 
                     <div>
                         <label for="destino">Destino</label>
-                        <input type="text" id="destino" placeholder="Digite a cidade ou endereço">
+
+                        <input
+                            type="text"
+                            id="destino"
+                            placeholder="Digite a cidade ou endereço"
+                        >
                     </div>
 
                     <div>
                         <label for="tipoPercurso">Tipo de percurso</label>
+
                         <select id="tipoPercurso">
                             <option value="ida">Somente ida</option>
                             <option value="ida_volta">Ida e volta</option>
@@ -162,12 +206,20 @@
                     </div>
 
                     <div id="campoRetorno" style="display: none;">
+
                         <label for="destinoRetorno">Destino do retorno</label>
-                        <input type="text" id="destinoRetorno" placeholder="Digite o destino do retorno">
+
+                        <input
+                            type="text"
+                            id="destinoRetorno"
+                            placeholder="Digite o destino do retorno"
+                        >
+
                     </div>
 
                     <div>
                         <label for="veiculo">Tipo de veículo</label>
+
                         <select id="veiculo">
                             <option value="Caminhão">Caminhão</option>
                             <option value="Carreta">Carreta</option>
@@ -178,13 +230,28 @@
 
                     <div>
                         <label for="consumo">Consumo médio (km/L)</label>
-                        <input type="number" id="consumo" placeholder="Ex: 2.5" min="0.1" step="0.1">
+
+                        <input
+                            type="number"
+                            id="consumo"
+                            placeholder="Ex: 2.5"
+                            min="0.1"
+                            step="0.1"
+                        >
                     </div>
 
                     <div>
                         <label for="diesel">Preço do diesel (R$/L)</label>
-                        <input type="number" id="diesel" placeholder="Carregado pela ANP" min="0.01" step="0.01">
+
+                        <input
+                            type="number"
+                            id="diesel"
+                            placeholder="Carregado pelos dados"
+                            min="0.01"
+                            step="0.01"
+                        >
                     </div>
+
                 </div>
 
                 <button type="button" id="calcularSimulacao">
@@ -194,221 +261,20 @@
                 <div id="resultadoSimulacao">
                     Informe os locais e os dados do veículo para iniciar a simulação.
                 </div>
+
             </div>
+
         </section>
 
+        <!-- RODAPÉ -->
         <footer>
             Freight Analytics | Projeto de análise de custos de frete
         </footer>
+
     </main>
 
-    <script src="src/script.js?v=4" defer></script>
-</body>
-</html>
+    <!-- JAVASCRIPT -->
+    <script src="src/script.js?v=5" defer></script>
 
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Freight Analytics | Agrária</title>
-
-    <link rel="stylesheet" href="src/style.css?v=4">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-
-<body>
-    <aside class="sidebar">
-        <div class="logo">
-            <h2>FREIGHT<span>ANALYTICS</span></h2>
-            <small>AGRÁRIA</small>
-        </div>
-
-        <nav>
-            <a href="#dashboard" class="active">Dashboard</a>
-            <a href="#analises">Análise de fretes</a>
-            <a href="#inteligencia">Inteligência Artificial</a>
-            <a href="#simulacao">Simulações</a>
-        </nav>
-    </aside>
-
-    <main class="main-content">
-        <header class="topbar">
-            <div>
-                <h1>Freight Analytics</h1>
-                <p>Plataforma de análise e planejamento de custos de transporte</p>
-            </div>
-            <span class="status">AMBIENTE DE TESTES</span>
-        </header>
-
-        <!-- DASHBOARD -->
-        <section id="dashboard">
-            <div class="section-heading">
-                <h2>Indicadores principais</h2>
-                <p>Visão geral dos custos de transporte</p>
-            </div>
-
-            <div class="cards">
-                <article class="card">
-                    <span>Total de fretes</span>
-                    <h3 id="totalFretes">Carregando...</h3>
-                    <small>Total de fretes registrados</small>
-                </article>
-
-                <article class="card">
-                    <span>Custo total</span>
-                    <h3 id="custoTotal">Carregando...</h3>
-                    <small>Valor total dos fretes</small>
-                </article>
-
-                <article class="card">
-                    <span>Custo médio</span>
-                    <h3 id="custoMedio">Carregando...</h3>
-                    <small>Valor médio por registro</small>
-                </article>
-
-                <article class="card">
-                    <span>Diesel S10 - Paraná</span>
-                    <h3 id="precoDieselMedio">Carregando...</h3>
-                    <small id="dataDiesel">Fonte: ANP</small>
-                </article>
-            </div>
-        </section>
-
-        <!-- ANÁLISE DE FRETES -->
-        <section id="analises">
-            <div class="section-heading">
-                <h2>Análise de custos</h2>
-                <p>Visualização dos indicadores de transporte</p>
-            </div>
-
-            <div class="panel">
-                <h3>Evolução dos custos</h3>
-                <div id="graficoCustos" class="chart-placeholder">
-                    <canvas id="graficoCustosChart"></canvas>
-                </div>
-            </div>
-        </section>
-
-        <!-- INTELIGÊNCIA ARTIFICIAL -->
-        <section id="inteligencia">
-            <div class="section-heading">
-                <h2>Inteligência Artificial</h2>
-                <p>Resultados do modelo de previsão LSTM</p>
-            </div>
-
-            <div class="cards">
-                <article class="card">
-                    <span>MAE</span>
-                    <h3 id="lstmMAE">Carregando...</h3>
-                    <small>Erro médio absoluto</small>
-                </article>
-
-                <article class="card">
-                    <span>RMSE</span>
-                    <h3 id="lstmRMSE">Carregando...</h3>
-                    <small>Raiz do erro quadrático</small>
-                </article>
-
-                <article class="card">
-                    <span>R²</span>
-                    <h3 id="lstmR2">Carregando...</h3>
-                    <small>Capacidade explicativa do modelo</small>
-                </article>
-
-                <article class="card">
-                    <span>Previsões avaliadas</span>
-                    <h3 id="totalPrevisoes">Carregando...</h3>
-                    <small>Registros do conjunto de teste</small>
-                </article>
-            </div>
-
-            <div class="panel" style="margin-top: 20px;">
-                <h3>Valores reais x valores previstos</h3>
-                <div style="height: 350px; position: relative;">
-                    <canvas id="graficoLSTM"></canvas>
-                </div>
-                <p style="margin-top: 15px; color: #64748b; font-size: 13px;">
-                    Comparação histórica entre os valores reais e as previsões
-                    geradas pelo modelo LSTM.
-                </p>
-            </div>
-        </section>
-
-        <!-- SIMULADOR -->
-        <section id="simulacao">
-            <div class="section-heading">
-                <h2>Planejamento de transporte</h2>
-                <p>Simulação de rotas e estimativa de custos operacionais</p>
-            </div>
-
-            <div class="panel">
-                <h3>Dados da viagem</h3>
-
-                <div class="simulation-grid">
-                    <div>
-                        <label for="origem">Local de partida</label>
-                        <input type="text" id="origem" placeholder="Obtendo localização...">
-                        <button type="button" id="usarLocalizacao">
-                            Usar minha localização
-                        </button>
-                    </div>
-
-                    <div>
-                        <label for="destino">Destino</label>
-                        <input type="text" id="destino" placeholder="Digite a cidade ou endereço">
-                    </div>
-
-                    <div>
-                        <label for="tipoPercurso">Tipo de percurso</label>
-                        <select id="tipoPercurso">
-                            <option value="ida">Somente ida</option>
-                            <option value="ida_volta">Ida e volta</option>
-                            <option value="personalizado">Retorno personalizado</option>
-                        </select>
-                    </div>
-
-                    <div id="campoRetorno" style="display: none;">
-                        <label for="destinoRetorno">Destino do retorno</label>
-                        <input type="text" id="destinoRetorno" placeholder="Digite o destino do retorno">
-                    </div>
-
-                    <div>
-                        <label for="veiculo">Tipo de veículo</label>
-                        <select id="veiculo">
-                            <option value="Caminhão">Caminhão</option>
-                            <option value="Carreta">Carreta</option>
-                            <option value="Bitrem">Bitrem</option>
-                            <option value="Outro">Outro</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="consumo">Consumo médio (km/L)</label>
-                        <input type="number" id="consumo" placeholder="Ex: 2.5" min="0.1" step="0.1">
-                    </div>
-
-                    <div>
-                        <label for="diesel">Preço do diesel (R$/L)</label>
-                        <input type="number" id="diesel" placeholder="Carregado pela ANP" min="0.01" step="0.01">
-                    </div>
-                </div>
-
-                <button type="button" id="calcularSimulacao">
-                    Calcular custo da viagem
-                </button>
-
-                <div id="resultadoSimulacao">
-                    Informe os locais e os dados do veículo para iniciar a simulação.
-                </div>
-            </div>
-        </section>
-
-        <footer>
-            Freight Analytics | Projeto de análise de custos de frete
-        </footer>
-    </main>
-
-    <script src="src/script.js?v=4" defer></script>
 </body>
 </html>
